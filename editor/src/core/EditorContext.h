@@ -32,6 +32,9 @@ public:
     Dialogs dialogs;
 
     ViewMode viewMode = ViewMode::Scene;
+
+    // First-person mouse look. While true, the game owns the mouse and the UI ignores it.
+    bool wantsMouseCapture = false;
     ImFont* monoFont = nullptr;
 
     SceneGraph& scene() { return document.getScene(); }

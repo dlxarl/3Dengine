@@ -197,11 +197,13 @@ void EditorContext::startPlaying() {
     if (scene().getMainCamera()) {
         viewMode = ViewMode::Game;
     }
+    wantsMouseCapture = play.getGameStatus().firstPerson;
 }
 
 void EditorContext::stopPlaying() {
     play.stop();
     viewMode = ViewMode::Scene;
+    wantsMouseCapture = false;
 }
 
 void EditorContext::closeProject() {

@@ -2,11 +2,13 @@
 // so that a control in the Render Settings panel cannot quietly stop doing anything.
 #include "AssetManager.h"
 #include "EditorCamera.h"
+#include "GameSession.h"
 #include "GlWindow.h"
 #include "MeshShape.h"
 #include "ObjectFactory.h"
 #include "Physics.h"
 #include "PlayController.h"
+#include "Player.h"
 #include "RenderTarget.h"
 #include "Renderer.h"
 #include "Resources.h"
@@ -490,6 +492,282 @@ namespace {
         CHECK(box->position.y == 5.0f);
     }
 
+    // A flat strip along -Z with the player at its near end, and a camera to follow it.
+    struct GameLevel {
+        SceneGraph scene;
+        Player* player = nullptr;
+
+        GameLevel() {
+            addShape(scene, ObjectType::Cube, glm::vec3(0.0f, -0.5f, -10.0f), glm::vec3(10.0f, 1.0f, 30.0f), glm::vec3(1.0f))->isStatic = true;
+
+            auto playerObject = ObjectFactory::create(ObjectType::Player);
+            playerObject->setPosition(glm::vec3(0.0f, 1.2f, 0.0f));
+            player = static_cast<Player*>(scene.add(playerObject));
+
+            scene.add(ObjectFactory::create(ObjectType::Camera));
+        }
+
+        Shape* addRole(GameRole role, glm::vec3 position) {
+            Shape* shape = addShape(scene, ObjectType::Cube, position, glm::vec3(1.0f), glm::vec3(1.0f));
+            shape->gameRole = role;
+            shape->isStatic = true;
+            return shape;
+        }
+
+        void run(GameSession& game, const GameInput& input, float seconds) {
+            const float step = 1.0f / 120.0f;
+            for (float time = 0.0f; time < seconds; time += step) {
+                game.update(scene, input, step);
+                scene.update(step);
+            }
+        }
+    };
+
+    void testGameRules() {
+        GameInput forward;
+        forward.moveForward = 1.0f;
+
+        {
+            // A scene without a player is simply not a game.
+            SceneGraph scene;
+            GameSession game;
+            game.begin(scene);
+            CHECK(!game.getStatus().hasPlayer);
+            game.update(scene, forward, 0.1f);
+        }
+
+        // The goal stays shut until every pickup is in, and pickups do not block the way.
+        {
+            GameLevel level;
+            Shape* pickup = level.addRole(GameRole::Pickup, glm::vec3(0.0f, 1.0f, -3.0f));
+            Shape* goal = level.addRole(GameRole::Goal, glm::vec3(0.0f, 1.0f, -8.0f));
+            level.addRole(GameRole::Pickup, glm::vec3(3.0f, 1.0f, 0.0f));
+
+            GameSession game;
+            game.begin(level.scene);
+            CHECK(game.getStatus().hasPlayer);
+            CHECK(game.getStatus().total == 2);
+
+            level.run(game, GameInput(), 0.5f);
+            const float grounded = level.player->position.y;
+            CHECK(grounded > 0.9f && grounded < 1.2f);
+
+            // Walks through the first pickup and up to the goal, which stays locked.
+            level.run(game, forward, 1.2f);
+            CHECK(game.getStatus().collected == 1);
+            CHECK(!pickup->visible);
+            CHECK(game.getStatus().goalLocked);
+            CHECK(!game.getStatus().won);
+
+            // A second touch does not count twice, and the other pickup opens the goal.
+            GameInput right;
+            right.moveRight = 1.0f;
+            level.player->setPosition(glm::vec3(0.0f, 1.1f, 0.0f));
+            level.run(game, right, 1.0f);
+            CHECK(game.getStatus().collected == 2);
+
+            level.player->setPosition(glm::vec3(0.0f, 1.1f, -6.0f));
+            level.run(game, forward, 0.5f);
+            CHECK(game.getStatus().won);
+
+            // A finished run freezes the player and the clock.
+            const glm::vec3 finished = level.player->position;
+            const float time = game.getStatus().seconds;
+            level.run(game, forward, 0.5f);
+            CHECK(level.player->position == finished);
+            CHECK(game.getStatus().seconds == time);
+            (void)goal;
+        }
+
+        // A goal alone is reachable at once: zero pickups means nothing to wait for.
+        {
+            GameLevel level;
+            level.addRole(GameRole::Goal, glm::vec3(0.0f, 1.0f, -3.0f));
+            GameSession game;
+            game.begin(level.scene);
+            level.run(game, forward, 1.0f);
+            CHECK(game.getStatus().won);
+        }
+
+        // Hazards and long falls send the player back, keeping what was collected.
+        {
+            GameLevel level;
+            level.addRole(GameRole::Pickup, glm::vec3(0.0f, 1.0f, -2.0f));
+            level.addRole(GameRole::Hazard, glm::vec3(0.0f, 1.0f, -6.0f));
+
+            GameSession game;
+            game.begin(level.scene);
+            level.run(game, forward, 1.2f);
+            CHECK(game.getStatus().falls == 1);
+            CHECK(game.getStatus().collected == 1);
+            CHECK(level.player->position.z > -3.0f);
+
+            GameInput right;
+            right.moveRight = 1.0f;
+            level.run(game, right, 2.2f);
+            CHECK(game.getStatus().falls >= 2);
+            CHECK(std::abs(level.player->position.x) < 4.0f);
+        }
+
+        // Jumping needs ground, and clears about 1.5 units.
+        {
+            GameLevel level;
+            GameSession game;
+            game.begin(level.scene);
+            level.run(game, GameInput(), 0.5f);
+            const float ground = level.player->position.y;
+
+            GameInput jump;
+            jump.jump = true;
+            float highest = ground;
+            for (int i = 0; i < 60; i++) {
+                level.run(game, i < 6 ? jump : GameInput(), 1.0f / 120.0f);
+                highest = std::max(highest, level.player->position.y);
+            }
+            CHECK(highest > ground + 1.0f);
+            CHECK(highest < ground + 2.0f);
+
+            // Walking off a ledge leaves a moment to jump, but not a jump in mid-air.
+            GameLevel ledge;
+            GameSession ledgeGame;
+            ledgeGame.begin(ledge.scene);
+            ledge.player->setPosition(glm::vec3(0.0f, 4.0f, 0.0f));
+            ledge.run(ledgeGame, GameInput(), 0.2f);
+            const float falling = ledge.player->velocity.y;
+            CHECK(falling < 0.0f);
+            ledge.run(ledgeGame, jump, 1.0f / 120.0f);
+            CHECK(ledge.player->velocity.y < 0.0f);
+        }
+
+        // A patrol swings around its start and stays within its range.
+        {
+            GameLevel level;
+            Shape* hazard = level.addRole(GameRole::Hazard, glm::vec3(20.0f, 1.0f, 0.0f));
+            hazard->patrolOffset = glm::vec3(0.0f, 0.0f, 4.0f);
+            hazard->patrolSeconds = 2.0f;
+
+            GameSession game;
+            game.begin(level.scene);
+            level.run(game, GameInput(), 0.5f);
+            CHECK(std::abs(hazard->position.z - 4.0f) < 0.1f);
+            level.run(game, GameInput(), 1.0f);
+            CHECK(std::abs(hazard->position.z + 4.0f) < 0.1f);
+            CHECK(hazard->position.x == 20.0f);
+        }
+
+        // The camera trails the player, and moving is relative to where it looks.
+        {
+            GameLevel level;
+            GameSession game;
+            game.begin(level.scene);
+            level.run(game, GameInput(), 0.2f);
+
+            CameraObject* camera = level.scene.getMainCamera();
+            CHECK(camera->getWorldPosition().z > level.player->position.z + 5.0f);
+            CHECK(camera->getWorldPosition().y > level.player->position.y + 2.0f);
+
+            GameInput turned = forward;
+            turned.turnDegrees = 90.0f;
+            game.update(level.scene, turned, 1.0f / 120.0f);
+            level.run(game, forward, 0.5f);
+            CHECK(level.player->position.x > 1.0f);
+            CHECK(std::abs(level.player->position.z) < 0.5f);
+        }
+
+        // First person: the camera is at the eyes, the body only casts a shadow, and looking
+        // decides where walking goes, without tilting into the ground.
+        {
+            GameLevel level;
+            level.scene.getMainCamera()->firstPerson = true;
+            GameSession game;
+            game.begin(level.scene);
+            CHECK(game.getStatus().firstPerson);
+            CHECK(level.player->shadowOnly);
+            level.run(game, GameInput(), 0.5f);
+
+            CameraObject* camera = level.scene.getMainCamera();
+            CHECK(glm::length(camera->getWorldPosition() - level.player->getCameraPosition()) < 0.05f);
+
+            GameInput look;
+            look.turnDegrees = 90.0f;
+            look.lookUpDegrees = -200.0f;
+            game.update(level.scene, look, 1.0f / 120.0f);
+            const glm::vec3 lookDirection = -glm::normalize(glm::vec3(camera->getWorldMatrix()[2]));
+            CHECK(lookDirection.y < -0.98f);
+            CHECK(lookDirection.y > -1.0f);
+
+            level.run(game, forward, 0.5f);
+            CHECK(level.player->position.x > 2.0f);
+            CHECK(std::abs(level.player->position.z) < 0.1f);
+
+            game.setFirstPerson(level.scene, false);
+            CHECK(!level.player->shadowOnly);
+            CHECK(glm::length(camera->getWorldPosition() - level.player->getCameraPosition()) > 5.0f);
+        }
+
+        // Physics leaves the player to its own movement.
+        {
+            GameLevel level;
+            level.player->velocity = glm::vec3(1.0f, 0.0f, 0.0f);
+            const glm::vec3 before = level.player->position;
+            level.scene.update(0.1f);
+            CHECK(level.player->position == before);
+        }
+    }
+
+    void testGameSerialization(AssetManager& assets) {
+        GameLevel level;
+        Shape* hazard = level.addRole(GameRole::Hazard, glm::vec3(1.0f));
+        hazard->patrolOffset = glm::vec3(0.0f, 2.0f, 0.0f);
+        hazard->patrolSeconds = 4.5f;
+
+        SceneGraph loaded;
+        std::string error;
+        CHECK(SceneSerializer::deserialize(SceneSerializer::serialize(level.scene), loaded, assets, &error));
+        CHECK(loaded.getPlayer() != nullptr);
+
+        Shape* restored = loaded.findAs<Shape>(hazard->id);
+        CHECK(restored && restored->gameRole == GameRole::Hazard);
+        CHECK(restored && restored->patrolSeconds == 4.5f);
+        CHECK(restored && restored->patrolOffset == glm::vec3(0.0f, 2.0f, 0.0f));
+        CHECK(!loaded.getMainCamera()->firstPerson);
+    }
+
+    void testPlayRestart(Project& project, AssetManager& assets) {
+        SceneDocument document(project, assets);
+        document.createNew();
+
+        SceneGraph& scene = document.getScene();
+        auto playerObject = ObjectFactory::create(ObjectType::Player);
+        playerObject->setPosition(glm::vec3(0.0f, 10.0f, 0.0f));
+        const ObjectId playerId = scene.add(playerObject)->id;
+
+        auto pickupObject = ObjectFactory::create(ObjectType::Cube);
+        pickupObject->setPosition(glm::vec3(0.0f, 9.0f, 0.0f));
+        Shape* pickup = static_cast<Shape*>(scene.add(pickupObject));
+        pickup->gameRole = GameRole::Pickup;
+        pickup->isStatic = true;
+        const ObjectId pickupId = pickup->id;
+
+        PlayController play(document);
+        play.play();
+        for (int i = 0; i < 30; i++) {
+            play.update(1.0f / 60.0f, GameInput());
+        }
+        CHECK(play.getGameStatus().collected == 1);
+
+        // Restarting puts everything back and stays in Play mode.
+        play.restart();
+        CHECK(play.isPlaying());
+        CHECK(play.getGameStatus().collected == 0);
+        CHECK(play.getGameStatus().seconds == 0.0f);
+        CHECK(document.getScene().find(playerId)->position.y == 10.0f);
+        CHECK(document.getScene().find(pickupId)->visible);
+
+        play.stop();
+        CHECK(document.getScene().findAs<Shape>(pickupId)->hasCollision);
+    }
+
     void testPlayMode(Project& project, AssetManager& assets) {
         SceneDocument document(project, assets);
         document.createNew();
@@ -504,12 +782,12 @@ namespace {
         CHECK(!document.isDirty());
 
         // Paused means frozen.
-        play.update(0.05f);
+        play.update(0.05f, GameInput());
         const float afterStep = document.getScene().find(id)->position.y;
         CHECK(afterStep < 5.0f);
         play.togglePause();
         CHECK(play.isPaused());
-        play.update(0.05f);
+        play.update(0.05f, GameInput());
         CHECK(document.getScene().find(id)->position.y == afterStep);
         play.togglePause();
 
@@ -579,6 +857,9 @@ int main() {
         testDuplicate(assets);
         testMeshAssets(assets, project->getRoot());
         testPhysics();
+        testGameRules();
+        testGameSerialization(assets);
+        testPlayRestart(*project, assets);
         testPlayMode(*project, assets);
     }
 

@@ -1,6 +1,11 @@
 #include "Player.h"
+#include <algorithm>
 #include <iostream>
 #include <cmath>
+
+namespace {
+    const float JUMP_GRACE_SECONDS = 0.1f;
+}
 
 Player::Player(glm::vec3 startPos) {
     position = startPos;
@@ -13,6 +18,8 @@ Player::Player(glm::vec3 startPos) {
 }
 
 void Player::update(float deltaTime, const std::vector<std::shared_ptr<Shape>>& worldObjects) {
+    jumpGrace = std::max(0.0f, jumpGrace - deltaTime);
+
     applyGravity(deltaTime);
 
     float currentYVelocity = velocity.y;
@@ -48,9 +55,10 @@ void Player::move(glm::vec3 direction) {
 }
 
 void Player::jump() {
-    if (isGrounded && !isCrouching) {
+    if ((isGrounded || jumpGrace > 0.0f) && !isCrouching) {
         velocity.y = std::sqrt(1.5f * std::abs(-19.6f) * 2.0f);
         isGrounded = false;
+        jumpGrace = 0.0f;
     }
 }
 
@@ -76,6 +84,7 @@ void Player::setGrounded(bool grounded) {
     isGrounded = grounded;
     if (grounded) {
         velocity.y = 0.0f;
+        jumpGrace = JUMP_GRACE_SECONDS;
     }
 }
 
@@ -93,8 +102,7 @@ void Player::checkCollisions(const std::vector<std::shared_ptr<Shape>>& worldObj
 
         if (this->checkCollision(*obj)) {
             if (velocityStep.y < 0) {
-                isGrounded = true;
-                velocity.y = 0.0f;
+                setGrounded(true);
             }
             else if (velocityStep.y > 0) {
                 velocity.y = 0.0f;

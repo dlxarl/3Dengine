@@ -7,11 +7,13 @@
 #include "ImGuiLayer.h"
 #include "MeshShape.h"
 #include "ObjectFactory.h"
+#include "Player.h"
 #include "SceneSerializer.h"
 #include "TestSupport.h"
 
 #include "imgui_internal.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <fstream>
@@ -74,6 +76,16 @@ namespace {
                 session.frame();
             }
             frames(2);
+        }
+
+        // A hidden window runs far faster than a display refreshes, so anything that
+        // depends on game time has to wait for it rather than count frames.
+        void runFor(double seconds) {
+            const auto end = std::chrono::steady_clock::now() + std::chrono::duration<double>(seconds);
+            while (std::chrono::steady_clock::now() < end) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(8));
+                frames(1);
+            }
         }
 
         // Lets ImGui's double-click window pass, so that the next press is a press of its own.
@@ -339,6 +351,100 @@ namespace {
         CHECK(ctx.scene().find(cube)->position.y == 5.0f);
     }
 
+    void testGameControls(Driver& ui, EditorContext& ctx) {
+        auto holdKey = [&](ImGuiKey key, int frames) {
+            ImGui::GetIO().AddKeyEvent(key, true);
+            ui.frames(frames);
+            ImGui::GetIO().AddKeyEvent(key, false);
+            ui.frames(2);
+        };
+
+        SceneObject* floor = ctx.createObject(ObjectType::Cube);
+        floor->setPosition(glm::vec3(0.0f, -20.5f, 0.0f));
+        floor->setScale(glm::vec3(60.0f, 1.0f, 60.0f));
+        static_cast<Shape*>(floor)->isStatic = true;
+
+        SceneObject* created = ctx.createObject(ObjectType::Player);
+        created->setPosition(glm::vec3(0.0f, -18.5f, 0.0f));
+        const ObjectId player = created->id;
+        ui.frames(2);
+
+        ui.key(ImGuiKey_P, COMMAND);
+        CHECK(ctx.play.isPlaying());
+        CHECK(ctx.play.getGameStatus().hasPlayer);
+        ui.runFor(0.5);
+
+        const glm::vec3 start = ctx.scene().find(player)->position;
+
+        holdKey(ImGuiKey_W, 30);
+        const glm::vec3 walked = ctx.scene().find(player)->position;
+        CHECK(walked.z < start.z - 0.05f);
+
+        // Space jumps, and does not also press the Play button that took the last click.
+        ui.runFor(0.2);
+        const float ground = ctx.scene().find(player)->position.y;
+        ImGui::GetIO().AddKeyEvent(ImGuiKey_Space, true);
+        float highest = ground;
+        for (int i = 0; i < 12; i++) {
+            ui.runFor(0.016);
+            highest = std::max(highest, ctx.scene().find(player)->position.y);
+        }
+        ImGui::GetIO().AddKeyEvent(ImGuiKey_Space, false);
+        ui.frames(2);
+        CHECK(highest > ground + 0.05f);
+        CHECK(ctx.play.isPlaying());
+
+        // V goes to first person, which takes the mouse from the UI; moving it looks around.
+        ui.key(ImGuiKey_V);
+        CHECK(ctx.play.getGameStatus().firstPerson);
+        CHECK(ctx.wantsMouseCapture);
+        CHECK(glfwGetInputMode(glfwGetCurrentContext(), GLFW_CURSOR) == GLFW_CURSOR_DISABLED);
+        CHECK((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_NoMouse) != 0);
+
+        CameraObject* camera = ctx.scene().getMainCamera();
+        const glm::vec3 lookBefore = glm::vec3(camera->getWorldMatrix()[2]);
+        double cursorX = 0.0, cursorY = 0.0;
+        glfwGetCursorPos(glfwGetCurrentContext(), &cursorX, &cursorY);
+        glfwSetCursorPos(glfwGetCurrentContext(), cursorX + 300.0, cursorY);
+        ui.frames(3);
+        CHECK(glm::length(glm::vec3(ctx.scene().getMainCamera()->getWorldMatrix()[2]) - lookBefore) > 0.3f);
+
+        // Esc gives the mouse back, and clicking the view takes it again.
+        ui.key(ImGuiKey_Escape);
+        CHECK(!ctx.wantsMouseCapture);
+        CHECK(glfwGetInputMode(glfwGetCurrentContext(), GLFW_CURSOR) == GLFW_CURSOR_NORMAL);
+        ui.frames(2);
+        ui.click(ui.viewportCenter());
+        ui.frames(2);
+        CHECK(ctx.wantsMouseCapture);
+
+        // Back to third person frees it.
+        ui.key(ImGuiKey_V);
+        ui.frames(2);
+        CHECK(!ctx.wantsMouseCapture);
+        CHECK((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_NoMouse) == 0);
+
+        // R starts over without leaving Play mode.
+        ui.key(ImGuiKey_R);
+        CHECK(ctx.play.isPlaying());
+        CHECK(glm::length(ctx.scene().find(player)->position - glm::vec3(0.0f, -18.5f, 0.0f)) < 1.0f);
+
+        // In the Scene view the same keys go back to being the editor's own.
+        ctx.viewMode = ViewMode::Scene;
+        ui.frames(2);
+        const glm::vec3 parked = ctx.scene().find(player)->position;
+        holdKey(ImGuiKey_W, 10);
+        CHECK(std::abs(ctx.scene().find(player)->position.z - parked.z) < 0.001f);
+
+        ui.key(ImGuiKey_P, COMMAND);
+        CHECK(ctx.play.isStopped());
+        ctx.select(player);
+        ctx.deleteSelected();
+        ctx.select(floor->id);
+        ctx.deleteSelected();
+        ui.frames(2);
+    }
+
     void testUnsavedChangesDialog(Driver& ui, EditorContext& ctx) {
         ctx.createObject(ObjectType::Cube);
         CHECK(ctx.document.isDirty());
@@ -422,6 +528,7 @@ int main() {
         testViewportPickingAndGizmo(ui, ctx);
         testAssetBrowser(ui, ctx, outside);
         testPlayToolbar(ui, ctx);
+        testGameControls(ui, ctx);
         testUnsavedChangesDialog(ui, ctx);
     }
 

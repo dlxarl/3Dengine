@@ -184,6 +184,15 @@ void ViewportPanel::drawGameView(EditorContext& ctx) {
 
     if (hasGameCamera) {
         drawImage();
+
+        // On release, so that the button's up event is not lost to the captured mouse.
+        const GameStatus& status = ctx.play.getGameStatus();
+        if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
+            !ctx.play.isStopped() && status.firstPerson) {
+            ctx.wantsMouseCapture = true;
+        }
+
+        drawGameHud(ctx);
         return;
     }
 
@@ -195,6 +204,73 @@ void ViewportPanel::drawGameView(EditorContext& ctx) {
     const ImVec2 size = ImGui::CalcTextSize(message);
     draw->AddText(ImVec2(imageMin.x + (imageSize.x - size.x) * 0.5f, imageMin.y + (imageSize.y - size.y) * 0.5f),
                   Theme::TextDim, message);
+}
+
+void ViewportPanel::drawGameHud(EditorContext& ctx) {
+    const GameStatus& status = ctx.play.getGameStatus();
+    if (ctx.play.isStopped() || !status.hasPlayer) return;
+
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImVec2 max(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
+    draw->PushClipRect(imageMin, max, true);
+
+    ImFont* font = ImGui::GetFont();
+    const ImU32 shadow = Theme::rgb(0x000000, 200);
+
+    auto text = [&](float size, ImVec2 position, ImU32 color, const char* value) {
+        draw->AddText(font, size, ImVec2(position.x + 2.0f, position.y + 2.0f), shadow, value);
+        draw->AddText(font, size, position, color, value);
+    };
+
+    auto centered = [&](float size, float y, ImU32 color, const char* value) {
+        const float width = font->CalcTextSizeA(size, FLT_MAX, 0.0f, value).x;
+        text(size, ImVec2(imageMin.x + (imageSize.x - width) * 0.5f, y), color, value);
+    };
+
+    const int minutes = (int)status.seconds / 60;
+    const int seconds = (int)status.seconds % 60;
+
+    char line[64];
+    std::snprintf(line, sizeof(line), "%d / %d", status.collected, status.total);
+    text(26.0f, ImVec2(imageMin.x + 20.0f, imageMin.y + 16.0f), Theme::Accent, line);
+
+    std::snprintf(line, sizeof(line), "%d:%02d", minutes, seconds);
+    const float timeWidth = font->CalcTextSizeA(26.0f, FLT_MAX, 0.0f, line).x;
+    text(26.0f, ImVec2(max.x - timeWidth - 20.0f, imageMin.y + 16.0f), Theme::Text, line);
+
+    if (status.falls > 0) {
+        std::snprintf(line, sizeof(line), status.falls == 1 ? "1 fall" : "%d falls", status.falls);
+        text(15.0f, ImVec2(imageMin.x + 20.0f, imageMin.y + 48.0f), Theme::TextDim, line);
+    }
+
+    if (status.firstPerson && !status.won) {
+        const ImVec2 middleOfView(imageMin.x + imageSize.x * 0.5f, imageMin.y + imageSize.y * 0.5f);
+        draw->AddCircleFilled(middleOfView, 3.5f, shadow, 12);
+        draw->AddCircleFilled(middleOfView, 2.0f, Theme::Text, 12);
+
+        if (!ctx.wantsMouseCapture) {
+            centered(15.0f, middleOfView.y + 24.0f, Theme::Text, "Click to look around");
+        }
+    }
+
+    const float middle = imageMin.y + imageSize.y * 0.38f;
+
+    if (status.won) {
+        centered(44.0f, middle, Theme::Accent, "Run complete");
+        std::snprintf(line, sizeof(line), "%d:%02d with %d %s", minutes, seconds, status.falls,
+                      status.falls == 1 ? "fall" : "falls");
+        centered(20.0f, middle + 56.0f, Theme::Text, line);
+        centered(15.0f, middle + 88.0f, Theme::TextDim, "Press R to run again");
+    } else if (status.goalLocked) {
+        centered(20.0f, middle, Theme::Warning, "Collect every crystal to open the gate");
+    } else if (status.seconds < 6.0f) {
+        centered(15.0f, max.y - 34.0f, Theme::Text,
+                 status.firstPerson
+                     ? "W A S D to move    Space to jump    Mouse to look    Esc to free the mouse    V to change view"
+                     : "W A S D to move    Space to jump    Q E to turn the camera    V to change view    R to restart");
+    }
+
+    draw->PopClipRect();
 }
 
 void ViewportPanel::drawGizmo(EditorContext& ctx) {

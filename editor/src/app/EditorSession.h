@@ -40,4 +40,12 @@ private:
     PanelVisibility panels;
 
     bool layoutPending;
+
+    bool mouseCaptured = false;
+    bool windowWasFocused = false;
+    double lastCursorX = 0.0;
+    double lastCursorY = 0.0;
+
+    void updateMouseCapture();
+    void addMouseLook(GameInput& input);
 };

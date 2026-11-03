@@ -15,6 +15,13 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
+NLOHMANN_JSON_SERIALIZE_ENUM(GameRole, {
+    {GameRole::None, "none"},
+    {GameRole::Pickup, "pickup"},
+    {GameRole::Goal, "goal"},
+    {GameRole::Hazard, "hazard"},
+})
+
 namespace {
     const int SCENE_FORMAT_VERSION = 1;
 
@@ -53,6 +60,9 @@ namespace {
             s["useGravity"] = shape->useGravity;
             s["isStatic"] = shape->isStatic;
             s["hasCollision"] = shape->hasCollision;
+            s["gameRole"] = shape->gameRole;
+            s["patrolOffset"] = vec3ToJson(shape->patrolOffset);
+            s["patrolSeconds"] = shape->patrolSeconds;
 
             json textures = json::array();
             for (const auto& texture : shape->getTextures()) {
@@ -73,7 +83,8 @@ namespace {
                            {"nearPlane", camera->nearPlane},
                            {"farPlane", camera->farPlane},
                            {"orthographic", camera->orthographic},
-                           {"orthographicSize", camera->orthographicSize}};
+                           {"orthographicSize", camera->orthographicSize},
+                           {"firstPerson", camera->firstPerson}};
         }
         return j;
     }
@@ -101,6 +112,9 @@ namespace {
             shape->useGravity = s.value("useGravity", shape->useGravity);
             shape->isStatic = s.value("isStatic", shape->isStatic);
             shape->hasCollision = s.value("hasCollision", shape->hasCollision);
+            shape->gameRole = s.value("gameRole", shape->gameRole);
+            shape->patrolOffset = vec3Field(s, "patrolOffset", shape->patrolOffset);
+            shape->patrolSeconds = s.value("patrolSeconds", shape->patrolSeconds);
 
             for (const json& texture : s.value("textures", json::array())) {
                 const std::string textureType = texture.value("type", std::string("texture_albedo"));
@@ -124,6 +138,7 @@ namespace {
             camera->farPlane = c.value("farPlane", camera->farPlane);
             camera->orthographic = c.value("orthographic", camera->orthographic);
             camera->orthographicSize = c.value("orthographicSize", camera->orthographicSize);
+            camera->firstPerson = c.value("firstPerson", camera->firstPerson);
         }
         return object;
     }

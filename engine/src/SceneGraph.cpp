@@ -2,6 +2,7 @@
 #include "AssetManager.h"
 #include "Log.h"
 #include "Physics.h"
+#include "Player.h"
 
 #include <algorithm>
 
@@ -35,7 +36,7 @@ void SceneGraph::update(float deltaTime) {
 
 void SceneGraph::draw(Shader& lightingShader, Shader& /*lampShader*/, const glm::mat4& view, const glm::mat4& proj) {
     for (const auto& shape : shapes) {
-        if (shape->isVisibleInHierarchy()) {
+        if (shape->isVisibleInHierarchy() && !shape->shadowOnly) {
             shape->draw(lightingShader);
         }
     }
@@ -196,6 +197,15 @@ CameraObject* SceneGraph::getMainCamera() const {
     for (const auto& object : objects) {
         if (object->getType() == ObjectType::Camera) {
             return static_cast<CameraObject*>(object.get());
+        }
+    }
+    return nullptr;
+}
+
+Player* SceneGraph::getPlayer() const {
+    for (const auto& shape : shapes) {
+        if (shape->getType() == ObjectType::Player) {
+            return static_cast<Player*>(shape.get());
         }
     }
     return nullptr;

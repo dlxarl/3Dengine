@@ -38,6 +38,7 @@ private:
     void drawToolStrip(EditorContext& ctx);
     void drawSceneView(EditorContext& ctx);
     void drawGameView(EditorContext& ctx);
+    void drawGameHud(EditorContext& ctx);
     void drawImage();
     void drawGizmo(EditorContext& ctx);
     void drawObjectMarkers(EditorContext& ctx);

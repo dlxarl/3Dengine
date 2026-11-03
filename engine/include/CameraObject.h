@@ -12,6 +12,7 @@ public:
     float farPlane = 200.0f;
     bool orthographic = false;
     float orthographicSize = 5.0f;  // half of the vertical extent
+    bool firstPerson = false;       // games look through the player's eyes instead of following
 
     CameraView makeView(float aspectRatio) const;
 };

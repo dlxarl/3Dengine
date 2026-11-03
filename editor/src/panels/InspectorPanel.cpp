@@ -159,6 +159,52 @@ void InspectorPanel::drawShape(EditorContext& ctx, Shape& shape) {
             ImGui::EndTable();
         }
     }
+
+    drawGameplay(ctx, shape);
+}
+
+void InspectorPanel::drawGameplay(EditorContext& ctx, Shape& shape) {
+    if (!Widgets::section("Gameplay")) return;
+
+    if (shape.getType() == ObjectType::Player) {
+        Widgets::wrappedDim("Controlled with the keyboard in the Game view. It starts from where you place it.");
+        return;
+    }
+
+    static const char* const ROLE_LABELS[] = {"None", "Pickup", "Goal", "Hazard"};
+    static const char* const ROLE_HINTS[] = {
+        nullptr,
+        "Collected by touching it. All of them open the goal.",
+        "Reaching it wins the game, once every pickup is collected.",
+        "Touching it sends the player back to the start.",
+    };
+
+    if (beginProperties("##gameplay")) {
+        Widgets::propertyLabel("Role");
+        int role = (int)shape.gameRole;
+        if (ImGui::Combo("##role", &role, ROLE_LABELS, 4)) {
+            shape.gameRole = (GameRole)role;
+            ctx.document.markDirty();
+        }
+
+        if (shape.gameRole == GameRole::Hazard) {
+            if (Widgets::vec3Row("Patrol", shape.patrolOffset, 0.05f, 0.0f)) {
+                ctx.document.markDirty();
+            }
+            if (ImGui::IsItemHovered()) Widgets::tooltip("How far it swings either side of its position.");
+
+            Widgets::propertyLabel("Patrol seconds", "How long one full swing takes.");
+            if (ImGui::DragFloat("##patrolSeconds", &shape.patrolSeconds, 0.05f, 0.1f, 60.0f, "%.2f")) {
+                ctx.document.markDirty();
+            }
+        }
+        ImGui::EndTable();
+    }
+
+    if (const char* hint = ROLE_HINTS[(int)shape.gameRole]) {
+        ImGui::Spacing();
+        Widgets::wrappedDim(hint);
+    }
 }
 
 void InspectorPanel::drawLight(EditorContext& ctx, LightObject& light) {
@@ -188,6 +234,11 @@ void InspectorPanel::drawLight(EditorContext& ctx, LightObject& light) {
 void InspectorPanel::drawCamera(EditorContext& ctx, CameraObject& camera) {
     if (Widgets::section("Camera")) {
         if (beginProperties("##camera")) {
+            Widgets::propertyLabel("First person", "In a game, look through the player's eyes instead of following.");
+            if (ImGui::Checkbox("##firstPerson", &camera.firstPerson)) {
+                ctx.document.markDirty();
+            }
+
             Widgets::propertyLabel("Orthographic");
             if (ImGui::Checkbox("##orthographic", &camera.orthographic)) {
                 ctx.document.markDirty();

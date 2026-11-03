@@ -39,6 +39,7 @@ The repository holds three things:
 
 ### Physics and interaction
 - Basic gravity and velocity integration.
+- Game rules driven by scene data: a player, pickups, a goal and patrolling hazards.
 - Collision checks between objects.
 - Static and dynamic scene objects.
 - First-person player movement.
@@ -211,7 +212,30 @@ Lighting, shadows and motion blur are also available there.
 
 ### Play mode
 
-Play takes a snapshot of the scene, runs the engine's physics on it and switches to the Game view. Stop restores the snapshot, so nothing done during play reaches the saved scene. Objects with Gravity fall and collide with what has Collision.
+Play takes a snapshot of the scene, runs the engine's physics and game rules on it and switches to the Game view. Stop restores the snapshot, so nothing done during play reaches the saved scene. Objects with Gravity fall and collide with what has Collision.
+
+### Making a game
+
+Any scene with a **Player** object is playable, with no code. Create one from the **Create** menu, and give other objects a role in the Inspector's **Gameplay** section:
+
+| Role | In play |
+| --- | --- |
+| Pickup | Collected by touching it, and spins until then. |
+| Goal | Wins the game once every pickup is collected. |
+| Hazard | Sends the player back to the start. Patrol makes it swing back and forth. |
+
+The player also goes back to the start after falling 14 units below it, keeping what they collected. The Game view shows a counter and a timer, and the first camera in the scene follows the player.
+
+| Key, in the Game view | Action |
+| --- | --- |
+| `W` `A` `S` `D` or arrows | Move, relative to the camera |
+| `Space` | Jump |
+| `Q` `E`, or right mouse button | Turn the camera |
+| Mouse | Look around, in first person. Click the view to capture the mouse, `Esc` to free it |
+| `V` | Switch between first and third person |
+| `R` | Restart |
+
+Tick **First person** on the camera in the Inspector to start a game in that view.
 
 ### Keyboard and mouse
 
@@ -236,6 +260,7 @@ Dependencies point one way: `editor` uses `engine`, and `engine` knows nothing a
 - **Renderer** runs a frame: a shadow pass, the scene pass at the internal resolution, then a post-process pass into the output. The demo and the Editor share it.
 - **Scene** is the interface the renderer draws. **SceneGraph** is its data-driven implementation, and the demo scenes are hand-written ones.
 - **SceneObject** gives everything in a scene an id, a name, a transform and a place in the hierarchy. **Shape** adds geometry, and **LightObject** and **CameraObject** are objects too.
+- **GameSession** applies the game rules to a scene from objects' roles, taking input as plain data, so it depends on neither the Editor nor a keyboard.
 - **SceneSerializer** reads and writes scene files. **AssetManager** loads assets by project-relative path.
 - **Engine** is the runtime loop for standalone executables. The Editor has its own, in **EditorApp**.
 - **EditorSession** draws one frame of the whole UI and leaves the event loop to its caller, which is what lets the tests run the real UI with scripted input.
@@ -252,8 +277,8 @@ ctest --test-dir build
 | Suite | Covers | Needs a display |
 | --- | --- | --- |
 | `project_tests` | Project creation and validation, relocation, recent projects, asset paths, import, the OBJ loader | No |
-| `render_tests` | Each render setting on the real pipeline, picking, hierarchy, serialization, physics, Play mode | Yes |
-| `ui_tests` | The real UI in a hidden window with scripted mouse and keyboard: selection, drag and drop, renaming, shortcuts, gizmos, asset drops, Play, the unsaved changes dialog | Yes |
+| `render_tests` | Each render setting on the real pipeline, picking, hierarchy, serialization, physics, game rules, Play mode | Yes |
+| `ui_tests` | The real UI in a hidden window with scripted mouse and keyboard: selection, drag and drop, renaming, shortcuts, gizmos, asset drops, Play, game controls, the unsaved changes dialog | Yes |
 
 Suites that need a display report as skipped when there is none.
 
@@ -262,7 +287,8 @@ Suites that need a display report as skipped when there is none.
 ### Not implemented
 
 - **Undo and redo.** Deleting an object cannot be reversed, except by reopening the saved scene.
-- **Scripts and player input.** Play mode runs physics only. The `Scripts` and `Audio` folders exist, but the engine does not run scripts or play sound.
+- **Scripts.** Games are limited to the built-in roles. The `Scripts` and `Audio` folders exist, but the engine does not run scripts or play sound.
+- **Standalone games.** A game runs in the Editor's Game view; there is no export to an executable.
 - **Materials.** Objects have a color and one albedo texture. Importing an OBJ also copies its `.mtl`, but the engine does not read it.
 - **Model formats other than OBJ.**
 - **More than one light.** The renderer uses the first light in the scene, and the Editor says so instead of offering a second.

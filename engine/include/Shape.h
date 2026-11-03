@@ -8,6 +8,9 @@
 #include "Shader.h"
 #include "Texture.h"
 
+// What an object means to the game rules; see GameSession.
+enum class GameRole { None, Pickup, Goal, Hazard };
+
 class Shape : public SceneObject {
 public:
     Shape();
@@ -31,7 +34,13 @@ public:
 
     // Rendering properties
     bool castShadow = true;
+    bool shadowOnly = false;   // left out of the camera's image, for a body the camera is inside
     bool tintTexture = false;  // multiply the albedo texture by the object color
+
+    // Gameplay
+    GameRole gameRole = GameRole::None;
+    glm::vec3 patrolOffset = glm::vec3(0.0f);  // a hazard swings this far either side of its position
+    float patrolSeconds = 3.0f;                // for one full swing
 
     bool checkCollision(Shape& other);
 

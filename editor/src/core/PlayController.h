@@ -1,4 +1,5 @@
 #pragma once
+#include "GameSession.h"
 #include "SceneDocument.h"
 
 #include <string>
@@ -20,10 +21,18 @@ public:
     void togglePause();
     void stop();
 
-    void update(float deltaTime);
+    // Starts over from the state Play was entered with, without leaving Play mode.
+    void restart();
+
+    void update(float deltaTime, const GameInput& input);
+
+    void toggleFirstPerson();
+
+    const GameStatus& getGameStatus() const { return game.getStatus(); }
 
 private:
     SceneDocument& document;
     State state = State::Stopped;
     std::string snapshot;
+    GameSession game;
 };

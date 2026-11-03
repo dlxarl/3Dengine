@@ -11,6 +11,7 @@ private:
     void drawObject(EditorContext& ctx, SceneObject& object);
     void drawTransform(EditorContext& ctx, SceneObject& object);
     void drawShape(EditorContext& ctx, Shape& shape);
+    void drawGameplay(EditorContext& ctx, Shape& shape);
     void drawLight(EditorContext& ctx, LightObject& light);
     void drawCamera(EditorContext& ctx, CameraObject& camera);
     void drawAsset(EditorContext& ctx, AssetThumbnails& thumbnails);

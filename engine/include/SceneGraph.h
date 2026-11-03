@@ -11,6 +11,7 @@
 #include <vector>
 
 class AssetManager;
+class Player;
 
 // A data-driven scene: a tree of addressable objects, built at runtime or loaded from a file.
 // Unlike the hand-written demo scenes, everything in it can be listed, found and changed.
@@ -52,6 +53,9 @@ public:
     // falls back to a default white light so that a new scene is not pitch black.
     LightObject* getLight() const;
     CameraObject* getMainCamera() const;
+
+    // The first Player in the scene, which the game rules drive.
+    Player* getPlayer() const;
 
     ObjectId getNextId() const { return nextId; }
     void setNextId(ObjectId id) { nextId = id; }

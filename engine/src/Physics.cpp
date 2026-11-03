@@ -6,6 +6,9 @@ void Physics::step(const std::vector<std::shared_ptr<Shape>>& shapes, float delt
     for (auto& object : shapes) {
         if (object->isStatic) continue;
 
+        // A Player moves itself, through Player::update().
+        if (object->getType() == ObjectType::Player) continue;
+
         if (object->useGravity)
             object->velocity.y += gravity * deltaTime;
 

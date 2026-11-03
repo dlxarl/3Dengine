@@ -21,6 +21,9 @@ namespace {
         {"Duplicate", "Command + D"},
         {"Delete", "Delete"},
         {"Rename", "F2"},
+        {"In the Game view: move, jump", "W A S D or arrows, Space"},
+        {"In the Game view: camera, restart", "Q E or right mouse button, R"},
+        {"In the Game view: view, free mouse", "V, Esc"},
     };
 }
 

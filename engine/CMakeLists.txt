@@ -24,6 +24,7 @@ add_library(engine STATIC
         src/PostProcessor.cpp
         src/Player.cpp
         src/Physics.cpp
+        src/GameSession.cpp
 
         src/RenderSettings.cpp
         src/RenderTarget.cpp

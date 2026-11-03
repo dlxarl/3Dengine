@@ -43,6 +43,13 @@ void drawCreateObjectItems(EditorContext& ctx, ObjectId parent) {
     }
 
     if (ImGui::MenuItem("Camera")) ctx.createObject(ObjectType::Camera, parent);
+
+    // The game rules drive one player, for the same reason.
+    const bool hasPlayer = ctx.scene().getPlayer() != nullptr;
+    if (ImGui::MenuItem("Player", nullptr, false, !hasPlayer)) ctx.createObject(ObjectType::Player, parent);
+    if (hasPlayer && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        Widgets::tooltip("This scene already has a player.");
+    }
 }
 
 void HierarchyPanel::draw(EditorContext& ctx, bool* open) {

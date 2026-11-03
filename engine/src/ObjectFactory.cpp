@@ -5,6 +5,7 @@
 #include "LightObject.h"
 #include "MeshShape.h"
 #include "Plane.h"
+#include "Player.h"
 #include "Sphere.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -25,6 +26,7 @@ namespace {
         {ObjectType::Mesh, "Mesh", "mesh"},
         {ObjectType::Light, "Light", "light"},
         {ObjectType::Camera, "Camera", "camera"},
+        {ObjectType::Player, "Player", "player"},
     };
 }
 
@@ -41,6 +43,7 @@ std::shared_ptr<SceneObject> ObjectFactory::create(ObjectType type) {
         // Sized to the unit box that collision checks assume.
         case ObjectType::Sphere:   shape = std::make_shared<Sphere>(0.5f); break;
         case ObjectType::Cylinder: shape = std::make_shared<Cylinder>(0.5f, 1.0f, 32); break;
+        case ObjectType::Player:   shape = std::make_shared<Player>(glm::vec3(0.0f)); break;
     }
 
     shape->setColor(glm::vec3(0.8f));
