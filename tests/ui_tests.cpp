@@ -394,20 +394,13 @@ namespace {
         CHECK(highest > ground + 0.05f);
         CHECK(ctx.play.isPlaying());
 
-        // V goes to first person, which takes the mouse from the UI; moving it looks around.
+        // V goes to first person, which takes the mouse from the UI. GLFW ignores scripted
+        // cursor moves in a window without focus, so looking itself is tested in render_tests.
         ui.key(ImGuiKey_V);
         CHECK(ctx.play.getGameStatus().firstPerson);
         CHECK(ctx.wantsMouseCapture);
         CHECK(glfwGetInputMode(glfwGetCurrentContext(), GLFW_CURSOR) == GLFW_CURSOR_DISABLED);
         CHECK((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_NoMouse) != 0);
-
-        CameraObject* camera = ctx.scene().getMainCamera();
-        const glm::vec3 lookBefore = glm::vec3(camera->getWorldMatrix()[2]);
-        double cursorX = 0.0, cursorY = 0.0;
-        glfwGetCursorPos(glfwGetCurrentContext(), &cursorX, &cursorY);
-        glfwSetCursorPos(glfwGetCurrentContext(), cursorX + 300.0, cursorY);
-        ui.frames(3);
-        CHECK(glm::length(glm::vec3(ctx.scene().getMainCamera()->getWorldMatrix()[2]) - lookBefore) > 0.3f);
 
         // Esc gives the mouse back, and clicking the view takes it again.
         ui.key(ImGuiKey_Escape);
