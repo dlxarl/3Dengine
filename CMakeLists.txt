@@ -1,75 +1,36 @@
 cmake_minimum_required(VERSION 3.20)
 project(3D_Engine VERSION 1.0.0 LANGUAGES CXX C)
 
+if (APPLE)
+    enable_language(OBJC OBJCXX)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-include(FetchContent)
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
 
-# GLFW
-FetchContent_Declare(glfw
-        GIT_REPOSITORY https://github.com/glfw/glfw.git
-        GIT_TAG 3.3.8
-)
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(glfw)
+option(ENGINE_BUILD_DEMO "Build the 3D_Engine demo executable" ON)
+option(ENGINE_BUILD_EDITOR "Build the Editor application" ON)
+option(ENGINE_BUILD_TESTS "Build the test executables" ON)
 
-# GLM
-FetchContent_Declare(glm
-        GIT_REPOSITORY https://github.com/g-truc/glm.git
-        GIT_TAG 1.0.1
-)
-FetchContent_MakeAvailable(glm)
+include(cmake/Dependencies.cmake)
+include(cmake/EngineResources.cmake)
 
-# stb
-FetchContent_Declare(stb
-        GIT_REPOSITORY https://github.com/nothings/stb.git
-        GIT_TAG master
-)
-FetchContent_MakeAvailable(stb)
+add_subdirectory(engine)
 
-add_executable(${PROJECT_NAME}
-        src/main.cpp
-        src/glad.c
+if (ENGINE_BUILD_DEMO)
+    add_subdirectory(demo)
+endif()
 
-        src/Engine.cpp
-        src/Input.cpp
-        src/Shader.cpp
-        src/Texture.cpp
-        src/stb_image_impl.cpp
+if (ENGINE_BUILD_EDITOR)
+    add_subdirectory(editor)
+endif()
 
-        src/Shape.cpp
-        src/Cube.cpp
-        src/Plane.cpp
-        src/Sphere.cpp
-
-        src/Skybox.cpp
-        src/PostProcessor.cpp
-        src/Player.cpp
-
-        # Scenes
-        src/scenes/DemoScene.cpp
-        src/scenes/DemoPhysics.cpp
-        include/Cylinder.h
-        src/Cylinder.cpp
-)
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-        PROJECT_ROOT_DIR="${CMAKE_SOURCE_DIR}"
-)
-
-target_include_directories(${PROJECT_NAME} PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/src/scenes/include
-        ${glm_SOURCE_DIR}
-        ${stb_SOURCE_DIR}
-)
-
-target_link_libraries(${PROJECT_NAME} PRIVATE
-        glfw
-)
-
-if (WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE opengl32 gdi32 user32 winmm shell32)
+if (ENGINE_BUILD_TESTS AND ENGINE_BUILD_EDITOR)
+    enable_testing()
+    add_subdirectory(tests)
 endif()

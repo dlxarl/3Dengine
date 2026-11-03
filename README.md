@@ -1,10 +1,14 @@
 # 3D Engine
 
-**A real-time 3D rendering and physics sandbox built with C++, OpenGL, and GLFW.**
+**A real-time 3D engine and desktop editor built with C++, OpenGL, GLFW and Dear ImGui.**
 
-3D Engine is a C++17 graphics project focused on the fundamentals of real-time 3D rendering, scene management, object transformations, lighting, shadows, and basic collision-based physics. It includes a small scene framework, reusable geometric primitives, a first-person player controller, and a demo environment for experimenting with the engine.
+3D Engine is a C++17 graphics project focused on real-time rendering, scene management, object transformations, lighting, shadows and collision-based physics, with retro rendering inspired by the PlayStation 1 and PlayStation 2 as its direction.
 
-The application currently launches the **DemoPhysics** scene by default.
+The repository holds three things:
+
+- **`engine/`**: the rendering engine, as a static library with no UI code.
+- **`editor/`**: a desktop editor with a project launcher, dockable panels and an integrated viewport. See [The Editor](#the-editor).
+- **`demo/`**: the original `DemoPhysics` and `DemoScene` sample scenes, as a standalone executable.
 
 ## Features
 
@@ -18,9 +22,12 @@ The application currently launches the **DemoPhysics** scene by default.
 - Framebuffer-based post-processing pipeline.
 - Motion blur post-processing shader.
 - FPS counter and optional frame-rate limiting.
+- Retro rendering: low internal resolution, per-vertex lighting, affine texture mapping, vertex snapping, texture filter control, color quantization and ordered dithering.
 
 ### Geometry and scene management
 - Reusable shape base class and scene abstraction.
+- Data-driven scenes with stable object ids, a parent/child hierarchy and JSON serialization.
+- OBJ model loading, with a binary cache.
 - Built-in primitives:
   - Cube
   - Plane
@@ -41,9 +48,9 @@ The application currently launches the **DemoPhysics** scene by default.
 
 > The physics implementation is a lightweight custom demonstration, not a full rigid-body physics engine. Collision handling and dynamics are intentionally limited.
 
-## Controls
+## Demo controls
 
-The active scene is `DemoPhysics`.
+The demo starts in `DemoPhysics`. Pass `--basic` to run `DemoScene` instead.
 
 | Key | Action |
 | --- | --- |
@@ -81,57 +88,36 @@ The camera uses a captured mouse cursor. Use the window close button or `Esc` to
 | GLAD | OpenGL function loading |
 | GLM 1.0.1 | Vector and matrix mathematics |
 | stb_image | Image and texture loading |
+| nlohmann/json | Project, settings and scene files |
+| Dear ImGui (docking) | Editor interface |
+| ImGuizmo | Scene view transform gizmos |
 | CMake 3.20+ | Build configuration |
 
-GLFW, GLM, and stb are declared through CMake FetchContent. GLAD source and headers are included in the repository.
+Dependencies are declared through CMake FetchContent, in `cmake/Dependencies.cmake`. GLAD source and headers are included in the repository. The Editor's fonts come from the Dear ImGui source tree.
 
-## Project structure
+## Repository structure
 
 ```text
 3Dengine/
-├── assets/
-│   ├── hud/                 # HUD resources
-│   ├── skybox/              # Skybox environment maps
-│   └── textures/            # Surface textures
-├── include/
-│   ├── Engine.h             # Main engine interface
-│   ├── Input.h              # Input handling
-│   ├── Scene.h              # Scene abstraction
-│   ├── Shape.h              # Base geometry abstraction
-│   ├── Cube.h
-│   ├── Plane.h
-│   ├── Sphere.h
-│   ├── Cylinder.h
-│   ├── Player.h             # First-person player controller
-│   ├── Shader.h
-│   ├── Texture.h
-│   ├── Skybox.h
-│   ├── ShadowMap.h
-│   ├── PostProcessor.h
-│   └── glad/                # GLAD headers
-├── src/
-│   ├── main.cpp
-│   ├── Engine.cpp
-│   ├── Input.cpp
-│   ├── Shape.cpp
-│   ├── Cube.cpp
-│   ├── Plane.cpp
-│   ├── Sphere.cpp
-│   ├── Cylinder.cpp
-│   ├── Player.cpp
-│   ├── Shader.cpp
-│   ├── Texture.cpp
-│   ├── Skybox.cpp
-│   ├── PostProcessor.cpp
-│   ├── glad.c
-│   ├── *.vert              # Vertex shaders
-│   ├── *.frag              # Fragment shaders
-│   └── scenes/
-│       ├── DemoScene.cpp
-│       ├── DemoPhysics.cpp
-│       └── include/
-├── CMakeLists.txt
-└── README.md
+├── cmake/                   # Dependencies and resource copying
+├── engine/
+│   ├── include/             # Public headers
+│   ├── src/
+│   └── shaders/             # Built-in shaders, copied next to each executable
+├── editor/
+│   ├── resources/shaders/   # Grid, outline and picking shaders
+│   └── src/
+│       ├── app/             # Windows, the launcher, theme, widgets
+│       ├── core/            # Document, Play mode, console, dialogs, shared context
+│       ├── panels/          # Hierarchy, Inspector, Project, Console, Render Settings, viewport
+│       ├── platform/        # Native file dialogs, Finder, Trash
+│       ├── project/         # Project format, recent projects, asset import
+│       └── viewport/        # Editor camera, overlays, picking
+├── demo/
+│   ├── assets/              # Sample textures and skyboxes
+│   ├── scenes/
+│   └── main.cpp
+└── tests/
 ```
 
 ## Requirements
@@ -140,83 +126,162 @@ GLFW, GLM, and stb are declared through CMake FetchContent. GLAD source and head
 - A C++17-compatible compiler
 - Git
 - An OpenGL 3.3-compatible graphics driver
-- GLFW build dependencies for your operating system
-- Internet access during the first CMake configure step (to fetch GLFW, GLM, and stb)
+- Internet access during the first CMake configure step, to fetch dependencies
 
-The project has a Windows-specific OpenGL system-library link configuration. Other platforms may require additional OpenGL and window-system linker configuration.
+On macOS, the Xcode Command Line Tools are enough. The Editor and the demo run on Apple Silicon.
 
 ## Build
-
-Clone the repository:
 
 ```bash
 git clone https://github.com/dlxarl/3Dengine.git
 cd 3Dengine
-```
-
-Configure the project:
-
-```bash
 cmake -S . -B build
+cmake --build build -j
 ```
 
-Build:
-
-```bash
-cmake --build build --config Release
-```
-
-CMake downloads the declared GLFW, GLM, and stb dependencies during configuration through FetchContent.
+Set `-DENGINE_BUILD_EDITOR=OFF` or `-DENGINE_BUILD_DEMO=OFF` to leave a target out.
 
 ## Run
 
-The executable target is named `3D_Engine`.
-
-On Linux and macOS, the executable is commonly located at:
+Open the Editor:
 
 ```bash
-./build/3D_Engine
+open build/editor/Editor.app
 ```
 
-On Windows with a multi-configuration generator:
+Or start it from a terminal, which also accepts a project to open directly:
 
-```powershell
-.\build\Release\3D_Engine.exe
+```bash
+./build/editor/Editor.app/Contents/MacOS/Editor --project ~/path/to/MyGame
 ```
 
-Run the application from the repository root. The engine loads shader and asset files using project-relative paths, so launching it from a different working directory may prevent resources from being found.
+Run the demo, from any directory:
+
+```bash
+./build/demo/3D_Engine
+```
+
+## The Editor
+
+### Project launcher
+
+The launcher opens first. It lists recent projects with their details, creates new projects from a template, and opens existing ones. Projects live wherever you choose, independent of the engine, and the Editor refuses locations inside its own bundle or source tree.
+
+The list and the last used location are kept per user, in `~/Library/Application Support/3D Engine`.
+
+### Project layout
+
+```text
+MyGame/
+├── Assets/                  # Your files: Models, Textures, Materials, Scenes, Audio, Scripts
+├── ProjectSettings/
+│   ├── Project.json         # The startup scene
+│   └── Graphics.json        # Render settings
+├── Packages/
+├── Library/                 # Generated data: mesh cache, thumbnails, panel layout
+├── .gitignore               # Excludes Library
+└── Project.json             # Name, id, engine version
+```
+
+Scenes refer to assets by project-relative path, so a project can be moved or renamed on disk. `Library` can be deleted at any time; it is rebuilt as needed.
+
+### Panels
+
+| Panel | What it does |
+| --- | --- |
+| Scene and Game | The engine's renderer, in a resizable viewport. Scene adds a grid, selection outline, gizmos and object markers. Game looks through the first camera in the scene. |
+| Hierarchy | Selects, creates, renames, duplicates and deletes objects. Drag a row onto another to nest it, or between rows to reorder. |
+| Inspector | Edits the live object: name, transform, color, texture, shadows, physics, and light or camera properties. |
+| Project | Browses `Assets`, imports files and creates folders. Drag a texture onto an object or a slot, a model into the Scene view, or a scene to open it. |
+| Console | Engine and Editor messages, filtered by level and text. |
+| Render Settings | The renderer's settings, saved in the project, and the scene's background and skybox. |
+
+Every control is connected: `tests/render_tests.cpp` checks that each render setting changes the rendered image.
+
+| Render setting | Effect |
+| --- | --- |
+| Rendering Mode | Modern shades per pixel. PS1 lights per vertex and maps textures affinely. PS2 lights per vertex with perspective-correct textures. Selecting a mode also loads a matching set of the settings below. |
+| Internal Resolution | Lines rendered before upscaling, with nearest-neighbor pixels. Width follows the viewport's shape. |
+| Texture Filtering | Nearest, bilinear or trilinear, for all material textures. |
+| Color Quantization | Bits of color for the final image. |
+| Dithering | A 4x4 Bayer pattern in internal-resolution pixels. Needs quantization. |
+| Vertex Precision | Snaps vertices to a screen grid, for the wobble of early 3D. |
+
+Lighting, shadows and motion blur are also available there.
+
+### Play mode
+
+Play takes a snapshot of the scene, runs the engine's physics on it and switches to the Game view. Stop restores the snapshot, so nothing done during play reaches the saved scene. Objects with Gravity fall and collide with what has Collision.
+
+### Keyboard and mouse
+
+| Input | Action |
+| --- | --- |
+| Hold right mouse button | Look around; add `W` `A` `S` `D` `Q` `E` to fly, and `Shift` to go faster |
+| `Option` + left mouse button | Orbit |
+| Middle mouse button, or `Option` + `Shift` + left mouse button | Pan |
+| Scroll | Zoom |
+| `W` `E` `R` | Move, rotate and scale tools |
+| `F` | Focus the selection |
+| `Cmd` + `S`, `Shift` + `Cmd` + `S` | Save, save as |
+| `Cmd` + `P`, `Shift` + `Cmd` + `P` | Play or stop, pause |
+| `Cmd` + `D`, `Delete`, `F2` | Duplicate, delete, rename |
+
+Docked panels keep their arrangement per project. **Window > Reset layout** restores the default.
 
 ## Architecture overview
 
-The project is organized around a small set of engine-level abstractions:
+Dependencies point one way: `editor` uses `engine`, and `engine` knows nothing about the Editor or Dear ImGui.
 
-- **Engine** initializes GLFW and GLAD, owns the main loop, updates input and the active scene, and coordinates rendering.
-- **Scene** provides the interface for loading, updating, drawing, and rendering scene depth.
-- **Shape** provides shared geometry state and transformation behavior for concrete primitives.
-- **Shader** loads and configures GLSL programs and their uniforms.
-- **Texture** loads image data and exposes it as an OpenGL texture.
-- **Input** handles keyboard and mouse input, camera orientation, and field of view.
-- **ShadowMap** manages the depth framebuffer used for shadow rendering.
-- **PostProcessor** renders the scene into framebuffer textures and applies a screen-space effect.
-- **Player** extends the cube shape with movement, gravity, crouching, jumping, and collision checks.
+- **Renderer** runs a frame: a shadow pass, the scene pass at the internal resolution, then a post-process pass into the output. The demo and the Editor share it.
+- **Scene** is the interface the renderer draws. **SceneGraph** is its data-driven implementation, and the demo scenes are hand-written ones.
+- **SceneObject** gives everything in a scene an id, a name, a transform and a place in the hierarchy. **Shape** adds geometry, and **LightObject** and **CameraObject** are objects too.
+- **SceneSerializer** reads and writes scene files. **AssetManager** loads assets by project-relative path.
+- **Engine** is the runtime loop for standalone executables. The Editor has its own, in **EditorApp**.
+- **EditorSession** draws one frame of the whole UI and leaves the event loop to its caller, which is what lets the tests run the real UI with scripted input.
+- **EditorContext** holds what panels share, and the operations they have in common, so that a menu item and a shortcut do the same thing.
 
-The engine loop follows the sequence:
+Built-in resources are found next to the executable by **Resources**, never relative to the working directory.
 
-1. Read frame timing and update input state.
-2. Process global engine controls.
-3. Update the active scene.
-4. Render the depth pass used for shadows.
-5. Render scene geometry with lighting.
-6. Apply post-processing when enabled.
-7. Swap the window buffers and poll events.
+## Tests
 
-## Notes and limitations
+```bash
+ctest --test-dir build
+```
 
-- The default entry point selects `DemoPhysics`; `DemoScene` is an additional rendering example.
-- Object collisions use simple shape-level checks and should not be treated as robust physical simulation.
-- The current shadow map uses a high-resolution depth texture, which can consume significant GPU memory.
-- The project uses a fixed project-root compile definition for shader paths and expects to be launched from the repository root for relative asset paths.
-- Build and runtime behavior may vary across operating systems and graphics drivers.
+| Suite | Covers | Needs a display |
+| --- | --- | --- |
+| `project_tests` | Project creation and validation, relocation, recent projects, asset paths, import, the OBJ loader | No |
+| `render_tests` | Each render setting on the real pipeline, picking, hierarchy, serialization, physics, Play mode | Yes |
+| `ui_tests` | The real UI in a hidden window with scripted mouse and keyboard: selection, drag and drop, renaming, shortcuts, gizmos, asset drops, Play, the unsaved changes dialog | Yes |
+
+Suites that need a display report as skipped when there is none.
+
+## Status and limitations
+
+### Not implemented
+
+- **Undo and redo.** Deleting an object cannot be reversed, except by reopening the saved scene.
+- **Scripts and player input.** Play mode runs physics only. The `Scripts` and `Audio` folders exist, but the engine does not run scripts or play sound.
+- **Materials.** Objects have a color and one albedo texture. Importing an OBJ also copies its `.mtl`, but the engine does not read it.
+- **Model formats other than OBJ.**
+- **More than one light.** The renderer uses the first light in the scene, and the Editor says so instead of offering a second.
+- **Multiple selection, and renaming assets in the Project panel.**
+- **Floating panels outside the main window.** Dear ImGui's multi-viewport mode is off.
+
+### Limits worth knowing
+
+- Physics is a lightweight demonstration. Collisions compare axis-aligned boxes and ignore rotation.
+- Nothing watches the disk continuously: the Project panel rescans every two seconds while it has focus.
+- The Scene view renders with the project's render settings, so retro settings apply there too. The grid and gizmos stay at full resolution.
+
+### Verification
+
+Built and run on an Apple Silicon Mac with macOS 26. The demo's output was compared with the previous version of the engine, patched only to open a window on macOS, and frame 300 matched on every pixel.
+
+- **Tested only through the test suites:** dropping files on the window was exercised from the point where the Editor receives them, not with a real drag from Finder.
+- **Partly tested:** the Import button opens the native file dialog, but choosing files in it was not exercised. The import behind it is covered by `project_tests`. The same applies to **Browse** and **Open project** in the launcher.
+- **Not built:** Windows and Linux. The code keeps them in mind, with typed paths in place of native dialogs, but neither has been compiled.
 
 ## Contributing
 

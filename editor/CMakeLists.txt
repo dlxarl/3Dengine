@@ -1,0 +1,107 @@
+# Dear ImGui and ImGuizmo do not build themselves in a form that fits, so they are compiled here.
+add_library(editor_imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+        ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
+)
+target_include_directories(editor_imgui PUBLIC
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+        ${imgui_SOURCE_DIR}/misc/cpp
+        ${imguizmo_SOURCE_DIR}/src
+)
+target_link_libraries(editor_imgui PUBLIC glfw)
+
+# The project system. It stays free of OpenGL and UI code so that it can be tested headlessly.
+add_library(editor_core STATIC
+        src/project/AssetImporter.cpp
+        src/project/Project.cpp
+        src/project/RecentProjects.cpp
+        src/project/UserPaths.cpp
+)
+target_include_directories(editor_core PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/project
+        ${stb_SOURCE_DIR}
+)
+target_compile_definitions(editor_core PRIVATE ENGINE_VERSION="${PROJECT_VERSION}")
+target_link_libraries(editor_core
+        PUBLIC engine
+        PRIVATE nlohmann_json::nlohmann_json
+)
+
+# The Editor proper. A library rather than a part of the executable, so that the UI tests
+# can run the same code.
+set(EDITOR_SOURCES
+        src/app/EditorApp.cpp
+        src/app/EditorSession.cpp
+        src/app/ImGuiLayer.cpp
+        src/app/LauncherApp.cpp
+        src/app/Theme.cpp
+        src/app/Widgets.cpp
+
+        src/core/ConsoleLog.cpp
+        src/core/Dialogs.cpp
+        src/core/EditorContext.cpp
+        src/core/PlayController.cpp
+        src/core/SceneDocument.cpp
+
+        src/panels/AssetThumbnails.cpp
+        src/panels/ConsolePanel.cpp
+        src/panels/HierarchyPanel.cpp
+        src/panels/InspectorPanel.cpp
+        src/panels/MainBars.cpp
+        src/panels/ProjectPanel.cpp
+        src/panels/RenderSettingsPanel.cpp
+        src/panels/ViewportPanel.cpp
+
+        src/viewport/EditorCamera.cpp
+        src/viewport/ViewportRenderer.cpp
+)
+
+if (APPLE)
+    list(APPEND EDITOR_SOURCES src/platform/Platform_mac.mm)
+else()
+    list(APPEND EDITOR_SOURCES src/platform/Platform_stub.cpp)
+endif()
+
+add_library(editor_ui STATIC ${EDITOR_SOURCES})
+
+target_include_directories(editor_ui PUBLIC
+        src/app
+        src/core
+        src/panels
+        src/platform
+        src/project
+        src/viewport
+)
+
+target_link_libraries(editor_ui PUBLIC editor_core editor_imgui)
+
+if (APPLE)
+    target_link_libraries(editor_ui PUBLIC "-framework Cocoa" "-framework UniformTypeIdentifiers")
+endif()
+
+add_executable(Editor MACOSX_BUNDLE src/main.cpp)
+target_link_libraries(Editor PRIVATE editor_ui)
+
+if (APPLE)
+    set_target_properties(Editor PROPERTIES
+            MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
+            MACOSX_BUNDLE_GUI_IDENTIFIER com.github.dlxarl.3dengine.editor
+            MACOSX_BUNDLE_BUNDLE_NAME "3D Engine Editor"
+            MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
+            MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+    )
+endif()
+
+engine_add_resources(Editor
+        EDITOR_SHADERS "${CMAKE_CURRENT_SOURCE_DIR}/resources/shaders"
+        FONTS
+            "${imgui_SOURCE_DIR}/misc/fonts/Roboto-Medium.ttf"
+            "${imgui_SOURCE_DIR}/misc/fonts/Cousine-Regular.ttf"
+)
