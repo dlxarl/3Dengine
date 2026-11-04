@@ -38,6 +38,11 @@ public:
     glm::vec3 getAmbientColor() const override { return ambientColor; }
     float getAnimationTime() const override { return animationTime; }
     void drawShadowCasters(Shader& depthShader, const glm::mat4& lightSpace) override;
+    int getLights(glm::vec3 eye, SceneLight* out, int most) const override;
+    std::shared_ptr<const RayTraceData> getRayTraceData() override;
+
+    // The still geometry changed in a way the scene did not see, such as an object being moved.
+    void invalidateRayTracing() { rayTraceDirty = true; }
     int getPointLights(glm::vec3 eye, glm::vec4* positions, glm::vec3* colors, int most) const override;
     bool hasGradientSky() const override { return gradientSky; }
     void drawEffects(EffectRenderer& renderer) override;
@@ -112,6 +117,8 @@ private:
     std::vector<std::shared_ptr<FireObject>> fires;
     std::vector<std::shared_ptr<WaterObject>> waters;
     std::vector<std::shared_ptr<AudioSourceObject>> audioSources;
+    std::shared_ptr<RayTraceData> rayTraceData;
+    bool rayTraceDirty = true;
     std::vector<SceneObject*> roots;
     std::unordered_map<ObjectId, SceneObject*> lookup;
 

@@ -97,6 +97,9 @@ EditorSession::EditorSession(Project& project, GLFWwindow* sessionWindow, ImGuiL
       layoutPending(useDefaultLayout) {
     ctx.monoFont = imgui.monoFont();
     ctx.gameFont = imgui.gameFont();
+    ctx.fontFor = [this](const std::string& assetPath) {
+        return imgui.fontFor(assetPath.empty() ? std::string() : ctx.assets.resolve(assetPath).string());
+    };
 
     glfwSetWindowUserPointer(window, &ctx);
     glfwSetDropCallback(window, onFilesDropped);
@@ -193,6 +196,7 @@ void EditorSession::frame() {
     ctx.play.update(deltaTime, input);
     if (ctx.play.isStopped()) ctx.scene().animate(deltaTime);   // fires burn and water moves while editing
     ctx.updateAutosave(deltaTime);
+    ctx.updateUndo();
 
     if (fullscreen) {
         bars.drawFullscreen(ctx, panels);

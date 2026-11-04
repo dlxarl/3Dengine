@@ -29,6 +29,7 @@ public:
     glm::vec4 background = glm::vec4(0.0f, 0.0f, 0.0f, 0.55f);   // behind a bar; the hover color of a button is derived from color
     float rounding = 0.0f;
 
+    std::string font;                             // asset path of a .ttf or .otf; empty is Inter
     std::string text;
     float fontSize = 24.0f;
     int align = 0;                                // 0 left, 1 center, 2 right

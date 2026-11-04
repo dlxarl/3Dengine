@@ -1,6 +1,7 @@
 #include "AssetImporter.h"
 #include "AudioEdit.h"
 #include "EditMesh.h"
+#include "RayTrace.h"
 #include "AssetManager.h"
 #include "ObjLoader.h"
 #include "Project.h"
@@ -328,6 +329,51 @@ namespace {
     }
 }
 
+// The hierarchy finds what is in a ray's way, as a brute-force check does.
+void testRayTrace() {
+    // A floor of two triangles, a wall of two, and a lot of small triangles to make the tree deep.
+    std::vector<glm::vec3> points;
+    auto quad = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d) {
+        for (const glm::vec3& p : {a, b, c, a, c, d}) points.push_back(p);
+    };
+    quad({-10, 0, -10}, {10, 0, -10}, {10, 0, 10}, {-10, 0, 10});
+    quad({-1, 0, 5}, {1, 0, 5}, {1, 3, 5}, {-1, 3, 5});
+    for (int i = 0; i < 400; i++) {
+        const float x = -9.0f + (i % 20) * 0.9f, z = -9.0f + (i / 20) * 0.9f;
+        points.push_back({x, 6.0f, z});
+        points.push_back({x + 0.5f, 6.0f, z});
+        points.push_back({x, 6.0f, z + 0.5f});
+    }
+    const std::shared_ptr<RayTraceData> data = buildRayTraceData(points);
+    CHECK(data->triangleCount() == (int)points.size() / 3);
+    CHECK(data->nodeCount() > 10);
+
+    // Down onto the floor: hit. Up from the floor into the sky: clear. Through the wall: hit.
+    CHECK(rayHitsAny(*data, {0, 2, 0}, {0, -1, 0}, 10.0f));
+    CHECK(!rayHitsAny(*data, {0, 2, 0}, {0, -1, 0}, 1.0f));
+    CHECK(!rayHitsAny(*data, {0.2f, 1, -6}, {0, 0, 1}, 5.0f));
+    CHECK(rayHitsAny(*data, {0, 1, 0}, {0, 0, 1}, 10.0f));
+    CHECK(!rayHitsAny(*data, {5, 1, 0}, {0, 0, 1}, 10.0f));
+
+    // Against every triangle in turn, over many rays.
+    unsigned seed = 7;
+    auto random = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1 << 24); };
+    int disagree = 0;
+    for (int i = 0; i < 600; i++) {
+        const glm::vec3 origin(random() * 20 - 10, random() * 8, random() * 20 - 10);
+        const glm::vec3 direction = glm::normalize(glm::vec3(random() - 0.5f, random() - 0.5f, random() - 0.5f));
+        const float far = 3.0f + random() * 20.0f;
+        bool expected = false;
+        for (size_t t = 0; t + 2 < points.size() && !expected; t += 3) {
+            RayTraceData single = *buildRayTraceData({points[t], points[t + 1], points[t + 2]});
+            expected = rayHitsAny(single, origin, direction, far);
+        }
+        if (expected != rayHitsAny(*data, origin, direction, far)) disagree++;
+    }
+    CHECK(disagree == 0);
+    CHECK(buildRayTraceData({})->empty() && !rayHitsAny(*buildRayTraceData({}), {0, 0, 0}, {0, 1, 0}, 5.0f));
+}
+
 void testEditMesh() {
     EditMesh cube = EditMesh::cube(2.0f);
     CHECK(cube.valid() && cube.positions.size() == 8 && cube.faces.size() == 6);
@@ -488,5 +534,6 @@ int main() {
     testUserPaths();
     testAudioEdit();
     testEditMesh();
+    testRayTrace();
     return testSummary("project_tests");
 }

@@ -211,17 +211,6 @@ void InspectorPanel::drawShape(EditorContext& ctx, Shape& shape) {
                 ctx.document.markDirty();
             }
 
-            Widgets::propertyLabel("Light range", "While emissive, it lights everything this near, like a fire. "
-                                                  "The eight nearest to the camera shine.");
-            if (ImGui::DragFloat("##lightRange", &shape.lightRange, 0.1f, 0.0f, 60.0f, "%.1f")) {
-                ctx.document.markDirty();
-            }
-            if (shape.lightRange > 0.0f) {
-                Widgets::propertyLabel("Light color");
-                if (ImGui::ColorEdit3("##lightColor", &shape.lightColor.x)) {
-                    ctx.document.markDirty();
-                }
-            }
             ImGui::EndTable();
         }
     }
@@ -246,132 +235,6 @@ void InspectorPanel::drawShape(EditorContext& ctx, Shape& shape) {
         }
     }
 
-    drawGameplay(ctx, shape);
-}
-
-void InspectorPanel::drawGameplay(EditorContext& ctx, Shape& shape) {
-    if (!Widgets::section("Gameplay")) return;
-
-    if (shape.getType() == ObjectType::Player) {
-        Widgets::wrappedDim("Controlled with the keyboard in the Game view. It starts from where you place it.");
-        return;
-    }
-
-    static const char* const ROLE_LABELS[] = {"None", "Pickup", "Goal", "Hazard", "Ground", "Villager", "Bandit",
-                                              "Horse", "Player body", "Sword", "Bow", "Arrow", "Item", "Chest",
-                                              "Bed", "Sign", "Water", "Deer", "Wolf", "Livestock", "Limb",
-                                              "Night glow", "Boar", "Bear", "Rabbit", "Bird", "Dragon",
-                                              "Fireball"};
-    static const char* const ROLE_HINTS[] = {
-        nullptr,
-        "Collected by touching it. All of them open the goal.",
-        "Reaching it wins the game, once every pickup is collected.",
-        "Touching it sends the player back to the start.",
-        "A mesh to walk on, whatever its shape.",
-        "Wanders near where you place it, and runs from danger.",
-        "Chases and strikes the player. Defeating them all wins the game.",
-        "Ridden with F, at a much higher speed.",
-        "How the player looks. The Player object then acts only as the collider.",
-        "Held by the player. Having a weapon turns on health and combat.",
-        "Held by the player. Having a weapon turns on health and combat.",
-        "One arrow the bow can fire. Add several, so that more can fly at once.",
-        "Taken with F. Name the item, and optionally how many: moonleaf or moonleaf:2.",
-        "Opened once with F. List what is inside: potion:2, gold:25.",
-        "Sleeping in it passes the night and restores health.",
-        "Read with F.",
-        "The surface of deep water, where the player swims.",
-        "Grazes, and bolts when the player comes near.",
-        "Hunts in packs, and sees further at night.",
-        "Wanders slowly, and only runs when hurt.",
-        "Swings with its parent's walk, like a leg or an arm.",
-        "Lit from dusk to dawn, like a window or a lantern.",
-        "Charges whoever comes too close.",
-        "Slow to anger, and hits hard.",
-        "Darts away when the player comes near.",
-        "Pecks about, and takes to the air when disturbed. Give it limbs that swing up and down for wings.",
-        "Sleeps here until the player comes near; then flies, breathes fire, swoops, and lands to fight when hurt.",
-        "What dragons breathe. Add a few, hidden until a dragon needs them.",
-    };
-    static_assert(IM_ARRAYSIZE(ROLE_LABELS) == IM_ARRAYSIZE(ROLE_HINTS), "a label and a hint for each role");
-
-    if (beginProperties("##gameplay")) {
-        Widgets::propertyLabel("Role");
-        int role = (int)shape.gameRole;
-        if (ImGui::Combo("##role", &role, ROLE_LABELS, IM_ARRAYSIZE(ROLE_LABELS))) {
-            shape.gameRole = (GameRole)role;
-            ctx.document.markDirty();
-        }
-
-        const char* parameterLabel = shape.gameRole == GameRole::Item    ? "Item"
-                                   : shape.gameRole == GameRole::Chest   ? "Contents"
-                                   : shape.gameRole == GameRole::Sign    ? "Text"
-                                   : nullptr;
-        if (parameterLabel) {
-            Widgets::propertyLabel(parameterLabel);
-            std::string parameter = shape.gameParameter;
-            if (Widgets::inputText("##gameParameter", parameter)) {
-                shape.gameParameter = parameter;
-                ctx.document.markDirty();
-            }
-        }
-
-        if (shape.gameRole == GameRole::Limb) {
-            Widgets::propertyLabel("Swing", "Degrees either way at a full stride.");
-            if (ImGui::DragFloat("##limbSwing", &shape.limbSwing, 0.5f, 0.0f, 90.0f, "%.1f")) ctx.document.markDirty();
-            Widgets::propertyLabel("Phase", "Degrees ahead of the stride. Opposite legs differ by 180.");
-            if (ImGui::DragFloat("##limbPhase", &shape.limbPhase, 1.0f, -360.0f, 360.0f, "%.0f")) ctx.document.markDirty();
-            static const char* const AXIS_LABELS[] = {"Forward and back", "Side to side", "Up and down (wings)"};
-            Widgets::propertyLabel("Swings", "Legs and arms swing forward and back with the walk; wings beat up and down in flight.");
-            if (ImGui::Combo("##limbAxis", &shape.limbAxis, AXIS_LABELS, IM_ARRAYSIZE(AXIS_LABELS))) ctx.document.markDirty();
-        }
-
-        if (shape.gameRole == GameRole::Hazard) {
-            if (Widgets::vec3Row("Patrol", shape.patrolOffset, 0.05f, 0.0f)) {
-                ctx.document.markDirty();
-            }
-            if (ImGui::IsItemHovered()) Widgets::tooltip("How far it swings either side of its position.");
-
-            Widgets::propertyLabel("Patrol seconds", "How long one full swing takes.");
-            if (ImGui::DragFloat("##patrolSeconds", &shape.patrolSeconds, 0.05f, 0.1f, 60.0f, "%.2f")) {
-                ctx.document.markDirty();
-            }
-        }
-        ImGui::EndTable();
-    }
-
-    if (const char* hint = ROLE_HINTS[(int)shape.gameRole]) {
-        ImGui::Spacing();
-        Widgets::wrappedDim(hint);
-    }
-}
-
-void InspectorPanel::drawLight(EditorContext& ctx, LightObject& light) {
-    if (Widgets::section("Light")) {
-        if (beginProperties("##light")) {
-            Widgets::propertyLabel("Color");
-            if (ImGui::ColorEdit3("##lightColor", &light.color.x, ImGuiColorEditFlags_Float)) {
-                ctx.document.markDirty();
-            }
-
-            Widgets::propertyLabel("Directional", "Sunlight: the same direction everywhere, along the light's forward axis.");
-            if (ImGui::Checkbox("##directional", &light.directional)) {
-                ctx.document.markDirty();
-            }
-
-            Widgets::propertyLabel("Intensity");
-            if (ImGui::DragFloat("##intensity", &light.intensity, 0.01f, 0.0f, 20.0f, "%.2f")) {
-                ctx.document.markDirty();
-            }
-            ImGui::EndTable();
-        }
-
-        if (ctx.scene().getLight() != &light) {
-            ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Text, Theme::Warning);
-            ImGui::TextWrapped("The renderer uses one light, and this is not it. The first light in the scene is used.");
-            ImGui::PopStyleColor();
-        }
-    }
 }
 
 void InspectorPanel::drawCamera(EditorContext& ctx, CameraObject& camera) {
@@ -569,6 +432,8 @@ void InspectorPanel::drawUi(EditorContext& ctx, UiObject& ui) {
                 changed = true;
             }
             changed |= slider("Font size", "##fontSize", ui.fontSize, 8.0f, 120.0f, "%.0f");
+            Widgets::propertyLabel("Font", "A .ttf or .otf from the project, for this text only. Inter when empty.");
+            changed |= Widgets::assetSlot("font", ui.font, AssetKind::Font);
         }
         if (ui.kind == UiKind::Text) {
             int align = ui.align;
@@ -701,3 +566,59 @@ void InspectorPanel::drawAsset(EditorContext& ctx, AssetThumbnails& thumbnails) 
         }
     }
 }
+
+void InspectorPanel::drawLight(EditorContext& ctx, LightObject& light) {
+    if (!Widgets::section("Light")) return;
+    bool changed = false;
+
+    if (beginProperties("##light")) {
+        static const char* const TYPES[] = {"Point", "Spot", "Directional"};
+        static const char* const TYPE_TIPS[] = {
+            "Shines every way from its position: a lantern, a candle, a neon sign.",
+            "A cone from its position along its forward axis: a torch, a street lamp, a headlight.",
+            "The same direction everywhere, along the forward axis: the sun or the moon. Its shadows follow the camera."};
+        Widgets::propertyLabel("Type", TYPE_TIPS[(int)light.type]);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##lightType", TYPES[(int)light.type])) {
+            for (int i = 0; i < 3; i++) {
+                if (ImGui::Selectable(TYPES[i], (int)light.type == i)) {
+                    light.type = (LightType)i;
+                    changed = true;
+                }
+                if (ImGui::IsItemHovered()) Widgets::tooltip(TYPE_TIPS[i]);
+            }
+            ImGui::EndCombo();
+        }
+
+        Widgets::propertyLabel("Color");
+        changed |= ImGui::ColorEdit3("##lightColor", &light.color.x, ImGuiColorEditFlags_Float);
+        changed |= slider("Temperature", "##temperature", light.temperature, 0.0f, 12000.0f, light.temperature > 0.0f ? "%.0f K" : "off");
+        if (ImGui::IsItemHovered()) Widgets::tooltip("Tints the color like a glowing body: 2000 K is a candle, 3200 a bulb, 6500 daylight. 0 uses the color as it is.");
+        changed |= slider("Intensity", "##intensity", light.intensity, 0.0f, 20.0f, "%.2f");
+        changed |= slider("Specular", "##specular", light.specular, 0.0f, 4.0f, "%.2f");
+
+        if (light.type != LightType::Directional) {
+            changed |= slider("Range", "##range", light.range, 0.5f, 200.0f, "%.1f m");
+            if (ImGui::IsItemHovered()) Widgets::tooltip("Where the light has faded to nothing. Light is only calculated inside it.");
+        }
+        if (light.type == LightType::Spot) {
+            changed |= slider("Cone angle", "##spotAngle", light.spotAngle, 1.0f, 89.0f, "%.0f deg");
+            changed |= slider("Edge softness", "##spotSoftness", light.spotSoftness, 0.0f, 1.0f, "%.2f");
+        }
+
+        changed |= toggle("Cast shadows", "##castShadows", light.castShadows,
+                          light.type == LightType::Directional ? "Shadows from a shadow map that follows the camera."
+                                                               : "Shadows traced from the light, when ray tracing is on in Render Settings.");
+        if (light.castShadows && light.type != LightType::Directional) {
+            changed |= slider("Source size", "##radius", light.radius, 0.0f, 3.0f, "%.2f m");
+            if (ImGui::IsItemHovered()) Widgets::tooltip("A bigger source makes softer shadows.");
+        }
+
+        changed |= slider("Flicker", "##flicker", light.flicker, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) Widgets::tooltip("How much the light wavers or stutters, like a candle or a faulty neon sign.");
+        if (light.flicker > 0.0f) changed |= slider("Flicker speed", "##flickerSpeed", light.flickerSpeed, 0.1f, 40.0f, "%.1f");
+        ImGui::EndTable();
+    }
+    if (changed) ctx.document.markDirty();
+}
+

@@ -84,6 +84,8 @@ namespace {
 
         auto light = ObjectFactory::create(ObjectType::Light);
         light->setPosition(glm::vec3(6.0f, 10.0f, 4.0f));
+        static_cast<LightObject*>(light.get())->type = LightType::Directional;
+        light->setWorldMatrix(glm::inverse(glm::lookAt(glm::vec3(6.0f, 10.0f, 4.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))));
         scene.add(light);
     }
 
@@ -1264,6 +1266,55 @@ namespace {
         }
     }
 
+    // A point light's shadow comes from rays traced against the still geometry, and only when asked for.
+    void testRayTracedShadows() {
+        SceneGraph scene;
+        scene.ambientColor = glm::vec3(0.05f);
+        Shape* floor = addShape(scene, ObjectType::Plane, glm::vec3(0.0f), glm::vec3(20.0f, 1.0f, 20.0f), glm::vec3(0.8f));
+        floor->isStatic = true;
+        Shape* block = addShape(scene, ObjectType::Cube, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(2.0f), glm::vec3(0.8f));
+        block->isStatic = true;
+        auto* lamp = static_cast<LightObject*>(scene.add(ObjectFactory::create(ObjectType::Light)));
+        lamp->setPosition(glm::vec3(3.0f, 5.0f, 0.0f));
+        lamp->type = LightType::Point;
+        lamp->range = 30.0f;
+        lamp->intensity = 3.0f;
+        lamp->radius = 0.5f;
+
+        CHECK(scene.getRayTraceData() && scene.getRayTraceData()->triangleCount() == 2 + 12);
+
+        Renderer renderer(512);
+        RenderTarget target;
+        target.resize(WIDTH, HEIGHT);
+        auto frame = [&](bool traced) {
+            RenderSettings settings;
+            settings.rayTracedShadows = traced;
+            renderer.render(scene, makeCamera(glm::vec3(-6.0f, 7.0f, 7.0f)), RenderOutput{target.framebuffer(), WIDTH, HEIGHT}, settings);
+            return readImage(target.framebuffer());
+        };
+        const Image open = frame(false);
+        const Image traced = frame(true);
+        CHECK(differingPixels(open, traced) > 800);
+
+        // The shadow is darker, never brighter.
+        double before = 0.0, after = 0.0;
+        for (size_t i = 0; i < open.size(); i += 4) {
+            before += open[i] + open[i + 1] + open[i + 2];
+            after += traced[i] + traced[i + 1] + traced[i + 2];
+        }
+        CHECK(after < before * 0.98);
+
+        // Switching the light's shadows off takes the rays away.
+        lamp->castShadows = false;
+        CHECK(differingPixels(open, frame(true)) < differingPixels(open, traced) / 4);
+
+        // A scene that moves a still object tells the tracer.
+        lamp->castShadows = true;
+        block->setPosition(glm::vec3(0.0f, 1.0f, 40.0f));
+        scene.invalidateRayTracing();
+        CHECK(differingPixels(frame(false), frame(true)) < differingPixels(open, traced) / 4);
+    }
+
     // A terrain is shaped by brushes, found by a ray, painted by tile, saved, and meshed.
     void testTerrain(AssetManager& assets) {
         TerrainObject terrain;
@@ -1955,7 +2006,7 @@ namespace {
             (void)tower;
             auto sun = ObjectFactory::create(ObjectType::Light);
             auto* sunLight = static_cast<LightObject*>(far.add(sun));
-            sunLight->directional = true;
+            sunLight->type = LightType::Directional;
             sunLight->setWorldMatrix(glm::inverse(glm::lookAt(glm::vec3(0.0f), glm::normalize(glm::vec3(1.0f, -1.0f, 0.4f)), glm::vec3(0, 1, 0))));
 
             CameraView view;
@@ -1998,7 +2049,7 @@ namespace {
             night.add(ground);
             auto moon = ObjectFactory::create(ObjectType::Light);
             auto* moonLight = static_cast<LightObject*>(night.add(moon));
-            moonLight->directional = true;
+            moonLight->type = LightType::Directional;
             moonLight->color = glm::vec3(0.05f);
             moonLight->setWorldMatrix(glm::inverse(glm::lookAt(glm::vec3(0.0f), glm::vec3(0.2f, -1.0f, 0.1f), glm::vec3(0, 0, 1))));
             Shape* fire = addShape(night, ObjectType::Cube, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.2f), glm::vec3(1.0f, 0.6f, 0.3f));
@@ -2219,7 +2270,7 @@ namespace {
         dragon->gameRole = GameRole::Dragon;
         scene.gradientSky = true;
         auto sun = ObjectFactory::create(ObjectType::Light);
-        static_cast<LightObject*>(scene.add(sun))->directional = true;
+        static_cast<LightObject*>(scene.add(sun))->type = LightType::Directional;
 
         const std::string text = SceneSerializer::serialize(scene);
         SceneGraph loaded;
@@ -2230,7 +2281,7 @@ namespace {
         CHECK(loaded.game.quests[1].after == "report");
         CHECK(loaded.game.characters[0].sells.size() == 2);
         CHECK(loaded.game.world.dayMinutes == 12.0f);
-        CHECK(loaded.getLight()->directional);
+        CHECK(loaded.getLight()->isDirectional());
         Shape* restored = loaded.findAs<Shape>(chest->id);
         CHECK(restored && restored->gameParameter == "potion:2, gold:25" && restored->emissive && restored->limbPhase == 180.0f);
         CHECK(restored && restored->limbAxis == 2 && restored->sway == 0.4f && restored->lightRange == 7.5f &&
@@ -2416,6 +2467,7 @@ int main() {
         testEffects(assets);
         testDiving(assets);
         testTerrain(assets);
+        testRayTracedShadows();
         testFireDamage(assets);
         testProps(assets);
         testProgress();

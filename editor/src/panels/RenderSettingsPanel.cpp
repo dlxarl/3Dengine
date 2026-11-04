@@ -59,8 +59,6 @@ void RenderSettingsPanel::draw(EditorContext& ctx, bool* open) {
     drawImage(ctx);
     drawPost(ctx);
     drawEnvironment(ctx);
-    drawInterface(ctx);
-
     ImGui::End();
 }
 
@@ -70,25 +68,18 @@ void RenderSettingsPanel::drawRendering(EditorContext& ctx) {
     if (!Widgets::section("Rendering")) return;
 
     if (beginProperties("##rendering")) {
-        Widgets::propertyLabel("Rendering Mode");
-        const char* preview = "";
-        const char* description = "";
-        for (const ModeOption& option : MODE_OPTIONS) {
-            if (option.mode == settings.mode) {
-                preview = option.label;
-                description = option.description;
-            }
-        }
-        if (ImGui::BeginCombo("##mode", preview)) {
+        // A preset loads a look in one go; nothing remembers which one it was, and every setting stays editable.
+        Widgets::propertyLabel("Retro preset", "Loads the image settings of a console: PS1 or PS2 lighting, resolution, dithering and color depth. Modern puts them back. The post-processing stack is kept.");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##preset", "Apply a preset...")) {
             for (const ModeOption& option : MODE_OPTIONS) {
-                if (ImGui::Selectable(option.label, option.mode == settings.mode)) {
-                    // Choosing a mode loads its whole look. Each setting stays editable afterwards.
-                    // The post-processing stack is the project's own; a mode only sets the retro look.
+                if (ImGui::Selectable(option.label)) {
                     const PostSettings keep = settings.post;
                     settings = RenderSettings::preset(option.mode);
                     settings.post = keep;
                     ctx.graphicsChanged();
                 }
+                if (ImGui::IsItemHovered()) Widgets::tooltip(option.description);
             }
             ImGui::EndCombo();
         }
@@ -99,12 +90,21 @@ void RenderSettingsPanel::drawRendering(EditorContext& ctx) {
         Widgets::propertyLabel("Shadows");
         ImGui::BeginDisabled(!settings.lighting);
         if (ImGui::Checkbox("##shadows", &settings.shadows)) ctx.graphicsChanged();
+
+        Widgets::propertyLabel("Ray traced shadows", "Shadows of point and spot lights found by tracing rays in the fragment shader against the scene's still (Static) geometry. Lights with Cast shadows on get them, soft when the light has a size.");
+        if (ImGui::Checkbox("##rtShadows", &settings.rayTracedShadows)) ctx.graphicsChanged();
+
+        Widgets::propertyLabel("Ray traced sun", "Also traces the sun's shadows, which then reach as far as the geometry does instead of the shadow map's range. Costs one ray or more per pixel.");
+        if (ImGui::Checkbox("##rtSun", &settings.rayTracedSun)) ctx.graphicsChanged();
+
+        ImGui::BeginDisabled(!settings.rayTracedShadows && !settings.rayTracedSun);
+        Widgets::propertyLabel("Rays per pixel", "For lights with a size: more rays give smoother soft shadows and cost more.");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::SliderInt("##raySamples", &settings.raySamples, 1, 8)) ctx.graphicsChanged();
+        ImGui::EndDisabled();
         ImGui::EndDisabled();
 
         ImGui::EndTable();
-
-        ImGui::Spacing();
-        Widgets::wrappedDim(description);
     }
 }
 
@@ -340,16 +340,6 @@ void RenderSettingsPanel::drawEnvironment(EditorContext& ctx) {
             ctx.document.markDirty();
         }
 
-        ImGui::EndTable();
-    }
-}
-
-void RenderSettingsPanel::drawInterface(EditorContext& ctx) {
-    if (!Widgets::section("Game UI")) return;
-
-    if (beginProperties("##gameUi")) {
-        Widgets::propertyLabel("Font", "The font of text in the game's own interface. Inter unless you choose another .ttf or .otf.");
-        if (Widgets::assetSlot("uiFont", ctx.project.uiFont, AssetKind::Font)) ctx.graphicsChanged();
         ImGui::EndTable();
     }
 }

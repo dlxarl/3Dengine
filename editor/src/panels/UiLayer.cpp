@@ -46,7 +46,6 @@ void UiLayer::draw(EditorContext& ctx, ImVec2 imageMin, ImVec2 imageSize) {
 
     context = &ctx;
     list = ImGui::GetWindowDrawList();
-    font = ctx.gameFont ? ctx.gameFont : ImGui::GetFont();
     scale = std::max(0.1f, imageSize.y / 720.0f);
 
     const Rect screen{imageMin, ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y)};
@@ -72,6 +71,8 @@ void UiLayer::visit(SceneObject& object, const Rect& parent, bool interactive) {
 void UiLayer::drawElement(UiObject& ui, const Rect& rect, bool interactive) {
     const ImVec2 size(rect.max.x - rect.min.x, rect.max.y - rect.min.y);
     const float rounding = ui.rounding * scale;
+    font = context->fontFor ? context->fontFor(ui.font) : nullptr;
+    if (!font) font = context->gameFont ? context->gameFont : ImGui::GetFont();
 
     ui.hovered = false;
     ui.pressed = false;

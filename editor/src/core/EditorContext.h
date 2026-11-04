@@ -71,6 +71,9 @@ public:
     ImFont* monoFont = nullptr;
     ImFont* gameFont = nullptr;
 
+    // The font for a path under Assets; Inter for none.
+    std::function<ImFont*(const std::string&)> fontFor;
+
     SceneGraph& scene() { return document.getScene(); }
 
     // Selection. An object and an asset are mutually exclusive; the Inspector shows either.
@@ -89,6 +92,8 @@ public:
     // Objects
     SceneObject* createObject(ObjectType type, ObjectId parent = InvalidObjectId);
     // A 2D element by name: Panel, Text, Image, Bar, Button, or the ready-made HUD and Menu.
+    // A light of a type, aimed sensibly: 0 point, 1 spot, 2 directional.
+    SceneObject* createLight(int type, ObjectId parent = InvalidObjectId);
     SceneObject* createUi(const std::string& what, ObjectId parent = InvalidObjectId);
     SceneObject* addModel(const std::string& assetPath, glm::vec3 position);
     void deleteSelected();
@@ -103,6 +108,14 @@ public:
 
     // The scripts the project declares, read from its source files a moment ago.
     const std::vector<ScriptInfo>& availableScripts();
+
+    // Undo for the scene: every settled change, such as a finished drag or an edited value,
+    // is a step. Called once a frame.
+    void updateUndo();
+    void undo();
+    void redo();
+    bool canUndo() const { return !undoStack.empty(); }
+    bool canRedo() const { return !redoStack.empty(); }
 
     // Play mode. The main view follows it: Game while playing, Scene again after.
     // fullscreen hides every panel and shows only the game, across the whole screen.
@@ -129,6 +142,11 @@ private:
     EditorExit exitRequest = EditorExit::None;
     std::string status;
     float graphicsSaveDelay = -1.0f;
+    std::vector<std::string> undoStack;
+    std::vector<std::string> redoStack;
+    std::string settledSnapshot;
+    unsigned settledRevision = 0;
+    unsigned settledEpoch = ~0u;
     std::vector<ScriptInfo> scriptList;
     std::chrono::steady_clock::time_point scriptsScannedAt;
 

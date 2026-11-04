@@ -17,7 +17,10 @@ std::string SceneDocument::getDisplayName() const {
 }
 
 void SceneDocument::markDirty() {
-    if (trackingChanges) dirty = true;
+    if (trackingChanges) {
+        dirty = true;
+        revisionCount++;
+    }
 }
 
 void SceneDocument::createNew() {
@@ -32,11 +35,14 @@ void SceneDocument::createNew() {
     auto light = ObjectFactory::create(ObjectType::Light);
     light->name = "Light";
     light->setPosition(glm::vec3(8.0f, 16.0f, 10.0f));
+    static_cast<LightObject*>(light.get())->type = LightType::Directional;
+    light->setRotation(glm::vec3(-50.0f, 30.0f, 0.0f));
     fresh->add(light);
 
     scene = std::move(fresh);
     assetPath.clear();
     dirty = false;
+    epochCount++;
 }
 
 bool SceneDocument::open(const std::string& newAssetPath, std::string* error) {
@@ -53,6 +59,7 @@ bool SceneDocument::open(const std::string& newAssetPath, std::string* error) {
     scene = std::move(loaded);
     assetPath = newAssetPath;
     dirty = false;
+    epochCount++;
 
     project.startupScene = assetPath;
     project.saveSettings();

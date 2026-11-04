@@ -43,6 +43,12 @@ private:
     std::unique_ptr<ShadowMap> shadowMap;
     std::unique_ptr<PostProcessor> postProcessor;
 
+    // The scene's still geometry as textures, for tracing shadow rays in the lighting shader.
+    unsigned int rayNodeTexture = 0;
+    unsigned int rayTriangleTexture = 0;
+    std::shared_ptr<const RayTraceData> rayUploaded;
+    void uploadRayTrace(const std::shared_ptr<const RayTraceData>& data);
+
     unsigned int materialSampler = 0;
     unsigned int fallbackTexture = 0;
     unsigned int skyVertexArray = 0;

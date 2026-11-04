@@ -1,10 +1,26 @@
 #pragma once
 #include "Shader.h"
+#include "RayTrace.h"
 #include "Underwater.h"
 #include <glm/glm.hpp>
 
 struct RenderSettings;
 class EffectRenderer;
+
+// One light as the renderer sees it.
+struct SceneLight {
+    enum Type { Directional = 0, Point = 1, Spot = 2 };
+    int type = Point;
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::vec3 direction = glm::vec3(0.0f, -1.0f, 0.0f);   // the way the light travels
+    glm::vec3 color = glm::vec3(1.0f);                      // with its intensity
+    float range = 15.0f;
+    float spotCosOuter = 0.7f;
+    float spotCosInner = 0.9f;
+    bool castShadows = false;
+    float radius = 0.0f;
+    float specular = 1.0f;
+};
 
 class Scene {
 public:
@@ -35,9 +51,17 @@ public:
     // The shadow pass. lightSpace lets a scene skip what cannot cast a shadow into view.
     virtual void drawShadowCasters(Shader& depthShader, const glm::mat4& /*lightSpace*/) { drawDepth(depthShader); }
 
+    // Every light that matters this frame: the sun (a directional light) first when there is one,
+    // then the nearest to eye. Fills up to most and returns how many there are.
+    virtual int getLights(glm::vec3 /*eye*/, SceneLight* /*out*/, int /*most*/) const { return 0; }
+
     // Lights besides the main one, such as fires and lit windows: position and range, and
     // color, nearest to eye first. Fills up to most and returns how many there are.
     virtual int getPointLights(glm::vec3 /*eye*/, glm::vec4* /*positions*/, glm::vec3* /*colors*/, int /*most*/) const { return 0; }
+
+    // The still geometry the renderer may trace shadow rays against, or null for none. The data
+    // is replaced when the geometry changes, so a renderer can tell by the pointer.
+    virtual std::shared_ptr<const RayTraceData> getRayTraceData() { return nullptr; }
 
     // Whether a sky is painted behind everything: the clear color at the horizon, deepening
     // overhead, with clouds, the sun or moon where the light comes from, and stars at night.

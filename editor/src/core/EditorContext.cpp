@@ -1,5 +1,7 @@
 #include "EditorContext.h"
+#include "imgui.h"
 #include "Log.h"
+#include "LightObject.h"
 #include "MeshShape.h"
 #include "ObjectFactory.h"
 #include "ScriptBuilder.h"
@@ -47,6 +49,19 @@ SceneObject* EditorContext::createObject(ObjectType type, ObjectId parent) {
     select(created->id);
     document.markDirty();
     return created;
+}
+
+SceneObject* EditorContext::createLight(int type, ObjectId parent) {
+    static const char* const NAMES[] = {"Point Light", "Spot Light", "Directional Light"};
+    auto* light = dynamic_cast<LightObject*>(createObject(ObjectType::Light, parent));
+    if (!light) return nullptr;
+    light->type = (LightType)std::clamp(type, 0, 2);
+    light->name = scene().makeUniqueName(NAMES[(int)light->type]);
+    light->setPosition(glm::vec3(0.0f, type == 2 ? 10.0f : 3.0f, 0.0f));
+    if (light->type == LightType::Directional) light->setRotation(glm::vec3(-50.0f, 30.0f, 0.0f));
+    if (light->type == LightType::Spot) light->setRotation(glm::vec3(-90.0f, 0.0f, 0.0f));
+    if (light->type == LightType::Directional) light->range = 400.0f;
+    return light;
 }
 
 SceneObject* EditorContext::createUi(const std::string& what, ObjectId parent) {
@@ -283,6 +298,66 @@ const std::vector<ScriptInfo>& EditorContext::availableScripts() {
         scriptList = ScriptBuilder::scan(project);
     }
     return scriptList;
+}
+
+void EditorContext::updateUndo() {
+    // Play changes the scene only for as long as it plays, and is undone by Stop.
+    if (!play.isStopped()) return;
+
+    if (settledEpoch != document.epoch()) {
+        undoStack.clear();
+        redoStack.clear();
+        settledSnapshot = document.snapshot();
+        settledRevision = document.revision();
+        settledEpoch = document.epoch();
+        return;
+    }
+    if (settledRevision == document.revision()) return;
+
+    // A drag or a typed value is one step: it counts when the mouse is up and no field is held.
+    if (ImGui::IsAnyMouseDown() || ImGui::IsAnyItemActive()) return;
+
+    scene().invalidateRayTracing();   // a change has settled: still geometry may have moved
+    undoStack.push_back(std::move(settledSnapshot));
+    if (undoStack.size() > 30) undoStack.erase(undoStack.begin());
+    redoStack.clear();
+    settledSnapshot = document.snapshot();
+    settledRevision = document.revision();
+}
+
+void EditorContext::undo() {
+    if (!play.isStopped() || undoStack.empty()) return;
+    updateUndo();   // a change still in progress becomes a step first
+
+    std::string error;
+    redoStack.push_back(document.snapshot());
+    const std::string target = std::move(undoStack.back());
+    undoStack.pop_back();
+    if (!document.restore(target, &error)) {
+        Log::error("Editor", "Cannot undo: " + error);
+        return;
+    }
+    document.markDirty();
+    settledSnapshot = target;
+    settledRevision = document.revision();
+    if (!getSelected()) selectedObject = InvalidObjectId;
+}
+
+void EditorContext::redo() {
+    if (!play.isStopped() || redoStack.empty()) return;
+
+    std::string error;
+    undoStack.push_back(document.snapshot());
+    const std::string target = std::move(redoStack.back());
+    redoStack.pop_back();
+    if (!document.restore(target, &error)) {
+        Log::error("Editor", "Cannot redo: " + error);
+        return;
+    }
+    document.markDirty();
+    settledSnapshot = target;
+    settledRevision = document.revision();
+    if (!getSelected()) selectedObject = InvalidObjectId;
 }
 
 void EditorContext::startPlaying(bool fullscreen) {

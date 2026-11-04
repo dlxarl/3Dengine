@@ -74,6 +74,12 @@ struct RenderSettings {
 
     bool lighting = true;
     bool shadows = true;
+
+    // Shadows from rays traced in the fragment shader against the scene's still geometry, with
+    // soft edges from lights that have a size. Costs more the more lights have shadows on.
+    bool rayTracedShadows = false;
+    bool rayTracedSun = false;      // the sun as well, which adds shadows beyond the shadow map's reach
+    int raySamples = 4;             // rays per pixel per light with a size, 1 to 8
     bool motionBlur = false;
 
     PostSettings post;

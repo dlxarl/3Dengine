@@ -43,6 +43,8 @@ add_library(engine STATIC
         src/RenderTarget.cpp
         src/Renderer.cpp
 
+        src/LightObject.cpp
+        src/RayTrace.cpp
         src/SceneGraph.cpp
         src/Terrain.cpp
         src/ScriptHost.cpp
