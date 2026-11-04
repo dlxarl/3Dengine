@@ -44,6 +44,7 @@ add_library(engine STATIC
         src/Renderer.cpp
 
         src/SceneGraph.cpp
+        src/Terrain.cpp
         src/ScriptHost.cpp
         src/SceneSerializer.cpp
         src/AssetManager.cpp

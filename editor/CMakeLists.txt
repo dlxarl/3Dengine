@@ -63,6 +63,7 @@ set(EDITOR_SOURCES
         src/panels/UiLayer.cpp
         src/panels/CodeEditorPanel.cpp
         src/panels/AudioEditorPanel.cpp
+        src/panels/TerrainEditorPanel.cpp
         src/panels/HierarchyPanel.cpp
         src/panels/InspectorPanel.cpp
         src/panels/MainBars.cpp

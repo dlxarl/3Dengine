@@ -195,6 +195,14 @@ void Icons::object(ImDrawList* draw, ImVec2 pos, float size, ObjectType type, Im
             draw->PathArcTo(g.at(8, 12), g.len(4.5f), 0.0f, 3.14159265f, 12);
             draw->PathStroke(color, 0, t);
             break;
+        case ObjectType::Terrain:
+            draw->PathLineTo(g.at(1.5f, 12));
+            draw->PathLineTo(g.at(5.5f, 5));
+            draw->PathLineTo(g.at(8.5f, 9));
+            draw->PathLineTo(g.at(11, 4));
+            draw->PathLineTo(g.at(14.5f, 12));
+            draw->PathStroke(color, ImDrawFlags_Closed, t);
+            break;
         case ObjectType::Mesh:
             draw->AddTriangle(g.at(8, 2), g.at(14, 13), g.at(2, 13), color, t);
             draw->AddLine(g.at(8, 2), g.at(8, 9), color, g.len(0.8f));

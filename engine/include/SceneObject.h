@@ -8,7 +8,7 @@
 using ObjectId = uint32_t;
 constexpr ObjectId InvalidObjectId = 0;
 
-enum class ObjectType { Empty, Cube, Plane, Sphere, Cylinder, Mesh, Light, Camera, Player, Particles, Fire, Water, AudioSource, Ui };
+enum class ObjectType { Empty, Cube, Plane, Sphere, Cylinder, Mesh, Light, Camera, Player, Particles, Fire, Water, AudioSource, Ui, Terrain };
 
 // Anything that lives in a scene: a stable identity, a name, a transform and a place in the
 // hierarchy. A plain SceneObject is an empty group node; Shape adds geometry.

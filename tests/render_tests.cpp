@@ -8,6 +8,7 @@
 #include "GameClock.h"
 #include "GameProgress.h"
 #include "GameSession.h"
+#include "Terrain.h"
 #include "UiObject.h"
 #include "GlWindow.h"
 #include "MeshShape.h"
@@ -1263,6 +1264,73 @@ namespace {
         }
     }
 
+    // A terrain is shaped by brushes, found by a ray, painted by tile, saved, and meshed.
+    void testTerrain(AssetManager& assets) {
+        TerrainObject terrain;
+        terrain.reset(16, 1.0f);
+        CHECK(terrain.heights.size() == 17 * 17 && terrain.tiles.size() == 256 && terrain.size() == 16.0f);
+        CHECK(terrain.contains(0.0f, 0.0f) && !terrain.contains(9.0f, 0.0f));
+
+        // Raising lifts the middle of the brush and leaves what is outside it.
+        for (int i = 0; i < 20; i++) terrain.applyBrush(TerrainObject::Brush::Raise, glm::vec2(0.0f), 3.0f, 4.0f, 0.5f, 0.05f);
+        CHECK(terrain.heightAt(0.0f, 0.0f) > 3.0f);
+        CHECK(terrain.heightAt(6.5f, 6.5f) == 0.0f);
+        const float peak = terrain.heightAt(0.0f, 0.0f);
+
+        // Smoothing lowers a peak and keeps the ground continuous; lowering undoes raising.
+        for (int i = 0; i < 20; i++) terrain.applyBrush(TerrainObject::Brush::Smooth, glm::vec2(0.0f), 4.0f, 1.0f, 0.5f, 0.05f);
+        CHECK(terrain.heightAt(0.0f, 0.0f) < peak);
+        TerrainObject flat;
+        flat.reset(16, 1.0f);
+        for (int i = 0; i < 20; i++) flat.applyBrush(TerrainObject::Brush::Raise, glm::vec2(0.0f), 3.0f, 4.0f, 0.5f, 0.05f);
+        for (int i = 0; i < 20; i++) flat.applyBrush(TerrainObject::Brush::Lower, glm::vec2(0.0f), 3.0f, 4.0f, 0.5f, 0.05f);
+        CHECK(std::abs(flat.heightAt(0.0f, 0.0f)) < 0.001f);
+        for (int i = 0; i < 40; i++) terrain.applyBrush(TerrainObject::Brush::Flatten, glm::vec2(0.0f), 5.0f, 1.0f, 0.2f, 0.05f, 1.0f);
+        CHECK(std::abs(terrain.heightAt(0.0f, 0.0f) - 1.0f) < 0.05f);
+
+        // A ray from above meets the surface where the height is.
+        glm::vec3 hit;
+        CHECK(terrain.raycast(glm::vec3(0.3f, 20.0f, -0.2f), glm::vec3(0.0f, -1.0f, 0.0f), hit));
+        CHECK(std::abs(hit.y - terrain.heightAt(0.3f, -0.2f)) < 0.05f);
+        CHECK(!terrain.raycast(glm::vec3(30.0f, 20.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), hit));
+
+        // Painting changes the tiles inside the brush only.
+        terrain.atlasColumns = 4;
+        terrain.atlasRows = 2;
+        CHECK(terrain.applyBrush(TerrainObject::Brush::Paint, glm::vec2(0.0f), 2.0f, 1.0f, 0.0f, 0.016f, 0.0f, 5));
+        CHECK(terrain.tiles[8 * 16 + 8] == 5 && terrain.tiles[0] == 0);
+
+        // The mesh has two triangles per cell and its UVs follow the tile.
+        terrain.rebuild();
+        CHECK(terrain.getMesh() && terrain.getMesh()->getTriangles().size() == 16 * 16 * 6);
+        CHECK(!terrain.needsRebuild());
+
+        // It saves, and comes back as it was.
+        SceneGraph scene;
+        auto* original = static_cast<TerrainObject*>(scene.add(ObjectFactory::create(ObjectType::Terrain)));
+        original->reset(8, 2.0f);
+        original->generate(7, 3.0f, 10.0f, 3);
+        original->atlasColumns = 4;
+        original->atlasRows = 2;
+        original->tiles[10] = 6;
+        SceneGraph loaded;
+        std::string error;
+        CHECK(SceneSerializer::deserialize(SceneSerializer::serialize(scene), loaded, assets, &error));
+        const TerrainObject* copy = nullptr;
+        for (const auto& shape : loaded.getShapes()) {
+            if (shape->getType() == ObjectType::Terrain) copy = static_cast<const TerrainObject*>(shape.get());
+        }
+        CHECK(copy != nullptr);
+        if (copy) {
+            CHECK(copy->cells == 8 && copy->cellSize == 2.0f && copy->atlasColumns == 4 && copy->tiles[10] == 6);
+            CHECK(copy->heights.size() == original->heights.size());
+            float worst = 0.0f;
+            for (size_t i = 0; i < copy->heights.size(); i++) worst = std::max(worst, std::abs(copy->heights[i] - original->heights[i]));
+            CHECK(worst < 0.001f);
+            CHECK(copy->gameRole == GameRole::Ground);
+        }
+    }
+
     // Swimming on the surface, diving, and running out of air.
     void testDiving(AssetManager& assets) {
         World world(assets);
@@ -2347,6 +2415,7 @@ int main() {
         testCharacterController(assets, project->getRoot());
         testEffects(assets);
         testDiving(assets);
+        testTerrain(assets);
         testFireDamage(assets);
         testProps(assets);
         testProgress();

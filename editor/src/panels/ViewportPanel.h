@@ -48,6 +48,7 @@ private:
     void drawObjectMarkers(EditorContext& ctx);
     void drawCameraFrustum(const CameraObject& camera, ImDrawList* draw);
     void handleShortcuts(EditorContext& ctx);
+    bool handleTerrainBrush(EditorContext& ctx, TerrainObject& terrain, bool hovered);
     void handleClick(EditorContext& ctx);
     void handleDrops(EditorContext& ctx);
     void focusSelection(EditorContext& ctx);

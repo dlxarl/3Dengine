@@ -4,6 +4,7 @@
 #include "MeshShape.h"
 #include "ObjectFactory.h"
 #include "Player.h"
+#include "Terrain.h"
 #include "UiObject.h"
 
 #include <nlohmann/json.hpp>
@@ -176,6 +177,13 @@ namespace {
                 s["mesh"] = mesh->getAssetPath();
             }
             if (const auto* player = dynamic_cast<const Player*>(shape)) s["gameControls"] = player->gameControls;
+            if (const auto* terrain = dynamic_cast<const TerrainObject*>(shape)) {
+                json heights = json::array();
+                for (float h : terrain->heights) heights.push_back(std::round(h * 1000.0f) / 1000.0f);
+                s["terrain"] = {{"cells", terrain->cells}, {"cellSize", terrain->cellSize},
+                                {"atlasColumns", terrain->atlasColumns}, {"atlasRows", terrain->atlasRows},
+                                {"heights", std::move(heights)}, {"tiles", json(terrain->tiles)}};
+            }
             j["shape"] = std::move(s);
         } else if (const auto* light = dynamic_cast<const LightObject*>(&object)) {
             j["light"] = {{"color", vec3ToJson(light->color)}, {"intensity", light->intensity},
@@ -264,7 +272,16 @@ namespace {
             // Scenes from before this option were all driven by the game rules.
             if (auto* player = dynamic_cast<Player*>(shape)) player->gameControls = s.value("gameControls", true);
 
-            if (auto* mesh = dynamic_cast<MeshShape*>(shape)) {
+            if (auto* terrain = dynamic_cast<TerrainObject*>(shape)) {
+                const json t = s.value("terrain", json::object());
+                terrain->reset(t.value("cells", terrain->cells), t.value("cellSize", terrain->cellSize));
+                terrain->atlasColumns = std::clamp(t.value("atlasColumns", 1), 1, 64);
+                terrain->atlasRows = std::clamp(t.value("atlasRows", 1), 1, 64);
+                const std::vector<float> heights = t.value("heights", std::vector<float>());
+                if (heights.size() == terrain->heights.size()) terrain->heights = heights;
+                const std::vector<uint8_t> tiles = t.value("tiles", std::vector<uint8_t>());
+                if (tiles.size() == terrain->tiles.size()) terrain->tiles = tiles;
+            } else if (auto* mesh = dynamic_cast<MeshShape*>(shape)) {
                 const std::string assetPath = s.value("mesh", std::string());
                 mesh->setMesh(assets.getMesh(assetPath), assetPath);
             }

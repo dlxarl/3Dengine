@@ -43,6 +43,7 @@ void drawCreateObjectItems(EditorContext& ctx, ObjectId parent) {
         Widgets::tooltip("This scene already has a light, and the renderer uses one.");
     }
 
+    if (ImGui::MenuItem("Terrain")) ctx.createObject(ObjectType::Terrain, parent);
     if (ImGui::MenuItem("Camera")) ctx.createObject(ObjectType::Camera, parent);
     if (ImGui::MenuItem("Audio Source")) ctx.createObject(ObjectType::AudioSource, parent);
 

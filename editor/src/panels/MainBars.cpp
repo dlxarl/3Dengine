@@ -127,6 +127,7 @@ void MainBars::updateNativeMenu(EditorContext& ctx, PanelVisibility& panels) {
     }
     create.push_back(separator());
     create.push_back(item("Light", CreateBase + (int)ObjectType::Light, "", ctx.scene().getLight() == nullptr));
+    create.push_back(item("Terrain", CreateBase + (int)ObjectType::Terrain));
     create.push_back(item("Camera", CreateBase + (int)ObjectType::Camera));
     create.push_back(item("Audio Source", CreateBase + (int)ObjectType::AudioSource));
     create.push_back(submenu("Effects", {item("Particles", CreateBase + (int)ObjectType::Particles),

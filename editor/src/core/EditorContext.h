@@ -6,6 +6,7 @@
 #include "Project.h"
 #include "SceneDocument.h"
 #include "ScriptBuilder.h"
+#include "Terrain.h"
 #include "UserSettings.h"
 
 #include <chrono>
@@ -38,6 +39,18 @@ public:
     ViewMode viewMode = ViewMode::Scene;
 
     UserSettings settings = UserSettings::load();
+
+    // The Terrain Editor's brush. While enabled, the left mouse button in the Scene view shapes
+    // the selected terrain instead of selecting.
+    struct TerrainBrushState {
+        bool enabled = false;
+        TerrainObject::Brush mode = TerrainObject::Brush::Raise;
+        float radius = 6.0f;
+        float strength = 4.0f;
+        float falloff = 0.6f;
+        int tile = 0;
+        float flattenHeight = 0.0f;   // taken from the ground where the stroke starts
+    } terrainBrush;
 
     // True while a text editing tool has the keyboard, so that Cmd+S saves its file.
     bool textEditorFocused = false;

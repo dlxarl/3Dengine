@@ -175,10 +175,17 @@ void ViewportPanel::drawSceneView(EditorContext& ctx) {
 
     handleDrops(ctx);
 
-    drawObjectMarkers(ctx);
-    drawGizmo(ctx);
+    bool sculpting = false;
+    if (ctx.terrainBrush.enabled && ctx.play.isStopped()) {
+        if (auto* terrain = ctx.scene().findAs<TerrainObject>(ctx.selectedObject)) {
+            sculpting = handleTerrainBrush(ctx, *terrain, hovered && !cameraBusy);
+        }
+    }
 
-    if (hovered && !cameraBusy) {
+    drawObjectMarkers(ctx);
+    if (!sculpting) drawGizmo(ctx);
+
+    if (hovered && !cameraBusy && !sculpting) {
         handleClick(ctx);
     }
     if (!cameraBusy && !ImGui::GetIO().WantTextInput) {
@@ -188,6 +195,51 @@ void ViewportPanel::drawSceneView(EditorContext& ctx) {
         ctx.focusRequested = false;
         focusSelection(ctx);
     }
+}
+
+bool ViewportPanel::handleTerrainBrush(EditorContext& ctx, TerrainObject& terrain, bool hovered) {
+    auto& brush = ctx.terrainBrush;
+
+    // The mouse as a ray, taken into the terrain's own space.
+    const ImVec2 mouse = ImGui::GetMousePos();
+    const glm::vec2 ndc(((mouse.x - imageMin.x) / imageSize.x) * 2.0f - 1.0f, 1.0f - ((mouse.y - imageMin.y) / imageSize.y) * 2.0f);
+    const glm::mat4 inverseView = glm::inverse(sceneView.projection * sceneView.view);
+    glm::vec4 nearPoint = inverseView * glm::vec4(ndc, -1.0f, 1.0f);
+    glm::vec4 farPoint = inverseView * glm::vec4(ndc, 1.0f, 1.0f);
+    nearPoint /= nearPoint.w;
+    farPoint /= farPoint.w;
+
+    const glm::mat4 world = terrain.getWorldMatrix();
+    const glm::mat4 toLocal = glm::inverse(world);
+    const glm::vec3 origin = glm::vec3(toLocal * nearPoint);
+    const glm::vec3 direction = glm::vec3(toLocal * farPoint) - origin;
+
+    glm::vec3 hit;
+    if (!hovered || !terrain.raycast(origin, direction, hit)) return true;
+
+    // The ring on the ground, following its shape.
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    for (float fraction : {1.0f, 1.0f - brush.falloff}) {
+        if (fraction <= 0.02f) continue;
+        std::vector<ImVec2> ring;
+        for (int i = 0; i <= 48; i++) {
+            const float angle = i / 48.0f * 6.2831853f;
+            const float x = hit.x + std::cos(angle) * brush.radius * fraction;
+            const float z = hit.z + std::sin(angle) * brush.radius * fraction;
+            ImVec2 screen;
+            if (project(glm::vec3(world * glm::vec4(x, terrain.heightAt(x, z) + 0.05f, z, 1.0f)), screen)) ring.push_back(screen);
+        }
+        if (ring.size() > 1) draw->AddPolyline(ring.data(), (int)ring.size(), fraction == 1.0f ? Theme::Accent : Theme::rgb(0xFFFFFF, 90), 0, 1.5f);
+    }
+
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) brush.flattenHeight = hit.y;
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyAlt) {
+        const float dt = std::min(ImGui::GetIO().DeltaTime, 0.05f);
+        if (terrain.applyBrush(brush.mode, glm::vec2(hit.x, hit.z), brush.radius, brush.strength, brush.falloff, dt, brush.flattenHeight, brush.tile)) {
+            ctx.document.markDirty();
+        }
+    }
+    return true;
 }
 
 void ViewportPanel::drawGameView(EditorContext& ctx) {

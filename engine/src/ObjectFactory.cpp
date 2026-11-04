@@ -7,6 +7,7 @@
 #include "MeshShape.h"
 #include "Plane.h"
 #include "Player.h"
+#include "Terrain.h"
 #include "UiObject.h"
 #include "Sphere.h"
 
@@ -34,6 +35,7 @@ namespace {
         {ObjectType::Water, "Water", "water"},
         {ObjectType::AudioSource, "Audio Source", "audioSource"},
         {ObjectType::Ui, "2D Element", "ui"},
+        {ObjectType::Terrain, "Terrain", "terrain"},
     };
 }
 
@@ -55,6 +57,7 @@ std::shared_ptr<SceneObject> ObjectFactory::create(ObjectType type) {
         // Sized to the unit box that collision checks assume.
         case ObjectType::Sphere:   shape = std::make_shared<Sphere>(0.5f); break;
         case ObjectType::Cylinder: shape = std::make_shared<Cylinder>(0.5f, 1.0f, 32); break;
+        case ObjectType::Terrain:  shape = std::make_shared<TerrainObject>(); break;
         case ObjectType::Player: {
             // A new player does nothing by itself: movement and the rest come from scripts.
             auto player = std::make_shared<Player>(glm::vec3(0.0f));

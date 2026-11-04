@@ -1,4 +1,5 @@
 #include "GameSession.h"
+#include "Terrain.h"
 #include "MeshShape.h"
 #include "Player.h"
 
@@ -179,6 +180,13 @@ void GameSession::begin(SceneGraph& scene) {
         const glm::vec3 at = water->getWorldPosition();
         const glm::vec2 half = 0.5f * water->size * glm::vec2(water->getWorldScale().x, water->getWorldScale().z);
         surroundings.waters.push_back({at.y, glm::vec4(at.x - half.x, at.z - half.y, at.x + half.x, at.z + half.y), water->round});
+    }
+
+    // A sculpted terrain makes its mesh when first drawn; the ground is built from it, so it must exist now.
+    for (const auto& shape : scene.getShapes()) {
+        if (auto* terrain = dynamic_cast<TerrainObject*>(shape.get())) {
+            if (terrain->needsRebuild() || !terrain->getMesh()) terrain->rebuild();
+        }
     }
 
     // Terrain may come in pieces; all of them make one ground.
