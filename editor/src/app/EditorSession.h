@@ -1,6 +1,7 @@
 #pragma once
 #include "AssetThumbnails.h"
 #include "AudioEditorPanel.h"
+#include "ModelEditorPanel.h"
 #include "TerrainEditorPanel.h"
 #include "CodeEditorPanel.h"
 #include "ConsolePanel.h"
@@ -42,6 +43,7 @@ private:
     CodeEditorPanel codeEditor;
     AudioEditorPanel audioEditor;
     TerrainEditorPanel terrainEditor;
+    ModelEditorPanel modelEditor;
     MainBars bars;
     PanelVisibility panels;
 

@@ -7,7 +7,9 @@
 #include "ImGuiLayer.h"
 #include "MeshShape.h"
 #include "ObjectFactory.h"
+#include "EditMesh.h"
 #include "Player.h"
+#include "Terrain.h"
 #include "SceneSerializer.h"
 #include "TestSupport.h"
 
@@ -436,6 +438,36 @@ namespace {
         CHECK(isTextAsset("a.cpp") && isTextAsset("B.JSON") && !isTextAsset("a.png"));
     }
 
+    // The editors open the files they are asked for and draw them without trouble.
+    void testToolEditors(Driver& ui, EditorContext& ctx) {
+        std::string error;
+        const fs::path model = ctx.project.assetsDir() / "tool_cube.obj";
+        CHECK(EditMesh::cube(2.0f).saveObj(model, &error));
+        ctx.toolRequests.model = model;
+        ui.frames(6);
+        CHECK(ctx.toolRequests.model.empty());
+
+        AudioClip clip;
+        clip.sampleRate = 8000;
+        for (int i = 0; i < 4000; i++) clip.samples.push_back((int16_t)(std::sin(i * 0.1f) * 12000));
+        const fs::path sound = ctx.project.assetsDir() / "tool_tone.wav";
+        CHECK(saveWav(clip, sound.string(), &error));
+        ctx.toolRequests.audio = sound;
+        ui.frames(6);
+        CHECK(ctx.toolRequests.audio.empty());
+
+        // A terrain made from the menu draws, and the brush shapes it.
+        SceneObject* created = ctx.createObject(ObjectType::Terrain);
+        auto* terrain = static_cast<TerrainObject*>(created);
+        terrain->reset(16, 1.0f);
+        ui.frames(3);
+        CHECK(terrain->getMesh() && !terrain->needsRebuild());
+        terrain->applyBrush(TerrainObject::Brush::Raise, glm::vec2(0.0f), 3.0f, 5.0f, 0.5f, 0.2f);
+        CHECK(terrain->needsRebuild());
+        ui.frames(3);
+        CHECK(!terrain->needsRebuild() && terrain->getMesh()->getBoundsMax().y > 0.5f);
+    }
+
     void testGameControls(Driver& ui, EditorContext& ctx) {
         auto holdKey = [&](ImGuiKey key, int frames) {
             ImGui::GetIO().AddKeyEvent(key, true);
@@ -619,6 +651,7 @@ int main() {
         testUnsavedChangesDialog(ui, ctx);
         testScripts(ui, ctx);
         testCodeEditor(ui, ctx);
+        testToolEditors(ui, ctx);
     }
 
     return testSummary("ui_tests");

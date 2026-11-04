@@ -238,6 +238,10 @@ void EditorSession::frame() {
         if (!ctx.toolRequests.audio.empty()) panels.audioEditor = true;
         audioEditor.draw(ctx, &panels.audioEditor);
     }
+    if (panels.modelEditor || !ctx.toolRequests.model.empty()) {
+        if (!ctx.toolRequests.model.empty()) panels.modelEditor = true;
+        modelEditor.draw(ctx, &panels.modelEditor);
+    }
     if (panels.terrainEditor) terrainEditor.draw(ctx, &panels.terrainEditor);
     else ctx.terrainBrush.enabled = false;
     if (panels.codeEditor) codeEditor.draw(ctx, &panels.codeEditor);
