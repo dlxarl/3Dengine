@@ -24,6 +24,8 @@ namespace {
         {"In the Game view: move, jump", "W A S D or arrows, Space"},
         {"In the Game view: camera, restart", "Q E or right mouse button, R"},
         {"In the Game view: view, free mouse", "V, Esc"},
+        {"In the Game view: use, run, potion", "F, Shift, H"},
+        {"In the Game view: bag, journal", "Tab, J"},
     };
 }
 

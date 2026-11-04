@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "Camera.h"
+#include "EffectRenderer.h"
 #include "PostProcessor.h"
 #include "RenderSettings.h"
 #include "Scene.h"
@@ -36,14 +37,18 @@ private:
     std::unique_ptr<Shader> lightingShader;
     std::unique_ptr<Shader> lampShader;
     std::unique_ptr<Shader> depthShader;
+    std::unique_ptr<Shader> skyShader;
 
+    std::unique_ptr<EffectRenderer> effects;
     std::unique_ptr<ShadowMap> shadowMap;
     std::unique_ptr<PostProcessor> postProcessor;
 
     unsigned int materialSampler = 0;
     unsigned int fallbackTexture = 0;
+    unsigned int skyVertexArray = 0;
     TextureFilter samplerFilter = TextureFilter::Trilinear;
 
     void applyTextureFilter(TextureFilter filter);
     void bindMaterialSamplers(unsigned int sampler);
+    void drawSky(Scene& scene, const CameraView& camera, glm::vec3 lightDirection);
 };

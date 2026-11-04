@@ -3,6 +3,18 @@
 GpuMesh::GpuMesh(const MeshData& data) {
     vertexCount = data.vertexCount();
 
+    triangles.reserve(vertexCount);
+    for (int i = 0; i < vertexCount; i++) {
+        triangles.emplace_back(data.vertices[i * 8], data.vertices[i * 8 + 1], data.vertices[i * 8 + 2]);
+    }
+    if (!triangles.empty()) {
+        boundsMin = boundsMax = triangles.front();
+        for (const glm::vec3& point : triangles) {
+            boundsMin = glm::min(boundsMin, point);
+            boundsMax = glm::max(boundsMax, point);
+        }
+    }
+
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
 
@@ -38,6 +50,18 @@ void GpuMesh::draw() const {
 void MeshShape::setMesh(std::shared_ptr<GpuMesh> newMesh, const std::string& newAssetPath) {
     mesh = std::move(newMesh);
     assetPath = newAssetPath;
+}
+
+void MeshShape::getBounds(glm::vec3& center, float& radius) const {
+    if (!mesh) {
+        Shape::getBounds(center, radius);
+        return;
+    }
+    const glm::vec3 low = mesh->getBoundsMin();
+    const glm::vec3 high = mesh->getBoundsMax();
+    const glm::vec3 size = getWorldScale();
+    center = glm::vec3(model * glm::vec4((low + high) * 0.5f, 1.0f));
+    radius = 0.5f * glm::length(high - low) * std::max(size.x, std::max(size.y, size.z));
 }
 
 void MeshShape::draw(Shader& shader) {

@@ -24,3 +24,9 @@ bool Platform::moveToTrash(const fs::path& path, std::string* error) {
     if (ec && error) *error = ec.message();
     return !ec;
 }
+
+void Platform::setMenuBar(const std::string&, const std::vector<MenuItem>&) {}
+
+std::vector<int> Platform::takeMenuCommands() {
+    return {};
+}

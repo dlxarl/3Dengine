@@ -333,6 +333,7 @@ void Project::loadSettings() {
         try {
             const json j = json::parse(text);
             startupScene = j.value("startupScene", std::string());
+            uiFont = j.value("uiFont", std::string());
         } catch (const json::exception& e) {
             Log::warn("Project", std::string("ProjectSettings/Project.json is damaged; using defaults. ") + e.what());
         }
@@ -350,6 +351,7 @@ bool Project::saveSettings(std::string* error) const {
     json settings;
     settings["version"] = 1;
     settings["startupScene"] = startupScene;
+    if (!uiFont.empty()) settings["uiFont"] = uiFont;
 
     if (!writeTextAtomic(settingsDir() / "Project.json", settings.dump(4))) {
         if (error) *error = "Cannot write ProjectSettings/Project.json.";

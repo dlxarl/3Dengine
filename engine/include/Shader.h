@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <unordered_map>
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -29,5 +30,9 @@ public:
     void setVec4(const std::string &name, const glm::vec4 &value) const;
 
 private:
+    // glGetUniformLocation is a string search inside the driver; every draw sets a dozen.
+    mutable std::unordered_map<std::string, int> locations;
+
+    int location(const std::string& name) const;
     void checkCompileErrors(unsigned int shader, std::string type);
 };

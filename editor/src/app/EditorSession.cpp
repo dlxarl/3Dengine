@@ -30,6 +30,13 @@ namespace {
         input.moveForward = axis(ImGuiKey_W, ImGuiKey_UpArrow, ImGuiKey_S, ImGuiKey_DownArrow);
         input.moveRight = axis(ImGuiKey_D, ImGuiKey_RightArrow, ImGuiKey_A, ImGuiKey_LeftArrow);
         input.jump = ImGui::IsKeyDown(ImGuiKey_Space);
+        input.dive = ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_C);
+        input.sprint = ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift);
+        input.interact = ImGui::IsKeyPressed(ImGuiKey_F, false);
+        input.usePotion = ImGui::IsKeyPressed(ImGuiKey_H, false);
+        for (int digit = 1; digit <= 9; digit++) {
+            if (ImGui::IsKeyPressed((ImGuiKey)(ImGuiKey_1 + digit - 1), false)) input.number = digit;
+        }
 
         const float keyTurn = (ImGui::IsKeyDown(ImGuiKey_E) ? 1.0f : 0.0f) - (ImGui::IsKeyDown(ImGuiKey_Q) ? 1.0f : 0.0f);
         input.turnDegrees = keyTurn * CAMERA_TURN_SPEED * io.DeltaTime;
@@ -89,6 +96,7 @@ EditorSession::EditorSession(Project& project, GLFWwindow* sessionWindow, ImGuiL
       projectPanel(ctx),
       layoutPending(useDefaultLayout) {
     ctx.monoFont = imgui.monoFont();
+    ctx.gameFont = imgui.gameFont();
 
     glfwSetWindowUserPointer(window, &ctx);
     glfwSetDropCallback(window, onFilesDropped);
@@ -110,7 +118,7 @@ void EditorSession::updateMouseCapture() {
     windowWasFocused = focused;
 
     const bool stillPlaying = !ctx.play.isStopped() && ctx.viewMode == ViewMode::Game &&
-                              ctx.play.getGameStatus().firstPerson;
+                              ctx.play.getGameStatus().hasPlayer;
     if (!stillPlaying) ctx.wantsMouseCapture = false;
 
     if (ctx.wantsMouseCapture == mouseCaptured) return;
@@ -136,9 +144,16 @@ void EditorSession::addMouseLook(GameInput& input) {
     input.lookUpDegrees -= (float)(y - lastCursorY) * MOUSE_LOOK_SPEED;
     lastCursorX = x;
     lastCursorY = y;
+
+    // ImGui ignores the mouse during capture, so the button is read directly.
+    input.attack = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
 }
 
 void EditorSession::frame() {
+    if (ctx.project.uiFont != appliedUiFont) {
+        appliedUiFont = ctx.project.uiFont;
+        ctx.gameFont = imgui.setGameFont(appliedUiFont.empty() ? std::string() : ctx.assets.resolve(appliedUiFont).string());
+    }
     imgui.beginFrame();
     thumbnails.newFrame();
 
@@ -154,21 +169,39 @@ void EditorSession::frame() {
         }
         if (ImGui::IsKeyPressed(ImGuiKey_V, false) && !io.WantTextInput && ctx.play.getGameStatus().hasPlayer) {
             ctx.play.toggleFirstPerson();
-            ctx.wantsMouseCapture = ctx.play.getGameStatus().firstPerson;
         }
+        // The first Esc gives the mouse back; the next one leaves the fullscreen view.
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
-            ctx.wantsMouseCapture = false;
+            if (ctx.wantsMouseCapture) {
+                ctx.wantsMouseCapture = false;
+            } else {
+                ctx.fullscreenPreview = false;
+            }
         }
     } else {
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     }
+
+    // The window follows the flag, so that every way of setting it takes the screen the same way.
+    applyFullscreen(ctx.fullscreenPreview && !ctx.play.isStopped() && ctx.viewMode == ViewMode::Game);
+    const bool fullscreen = glfwGetWindowMonitor(window) != nullptr && ctx.fullscreenPreview;
 
     updateMouseCapture();
 
     GameInput input = readGameInput(ctx);
     addMouseLook(input);
     ctx.play.update(deltaTime, input);
+    if (ctx.play.isStopped()) ctx.scene().animate(deltaTime);   // fires burn and water moves while editing
     ctx.updateAutosave(deltaTime);
+
+    if (fullscreen) {
+        bars.drawFullscreen(ctx, panels);
+        viewport.draw(ctx, true);
+        ctx.dialogs.draw();
+        viewport.render(ctx);
+        imgui.endFrame();
+        return;
+    }
 
     bars.draw(ctx, panels);
 
@@ -197,4 +230,20 @@ void EditorSession::frame() {
     viewport.render(ctx);
 
     imgui.endFrame();
+}
+
+void EditorSession::applyFullscreen(bool wanted) {
+    const bool isFullscreen = glfwGetWindowMonitor(window) != nullptr;
+    if (wanted == isFullscreen) return;
+
+    if (wanted) {
+        glfwGetWindowPos(window, &windowedX, &windowedY);
+        glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
+        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+        if (!mode) return;
+        glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+    } else {
+        glfwSetWindowMonitor(window, nullptr, windowedX, windowedY, windowedWidth, windowedHeight, GLFW_DONT_CARE);
+    }
 }

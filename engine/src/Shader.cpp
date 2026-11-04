@@ -82,39 +82,48 @@ void Shader::use()
     glUseProgram(ID);
 }
 
+int Shader::location(const std::string& name) const {
+    auto found = locations.find(name);
+    if (found != locations.end()) return found->second;
+
+    const int resolved = glGetUniformLocation(ID, name.c_str());
+    locations.emplace(name, resolved);
+    return resolved;
+}
+
 void Shader::setBool(const std::string &name, bool value) const {
     if (ID == 0) return;
-    glUniform1i(glGetUniformLocation(ID, name.c_str()), (int)value);
+    glUniform1i(location(name), (int)value);
 }
 
 void Shader::setInt(const std::string &name, int value) const {
     if (ID == 0) return;
-    glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
+    glUniform1i(location(name), value);
 }
 
 void Shader::setFloat(const std::string &name, float value) const {
     if (ID == 0) return;
-    glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
+    glUniform1f(location(name), value);
 }
 
 void Shader::setMat4(const std::string &name, const glm::mat4 &mat) const {
     if (ID == 0) return;
-    glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
+    glUniformMatrix4fv(location(name), 1, GL_FALSE, &mat[0][0]);
 }
 
 void Shader::setVec2(const std::string &name, const glm::vec2 &value) const {
     if (ID == 0) return;
-    glUniform2fv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
+    glUniform2fv(location(name), 1, &value[0]);
 }
 
 void Shader::setVec3(const std::string &name, const glm::vec3 &value) const {
     if (ID == 0) return;
-    glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
+    glUniform3fv(location(name), 1, &value[0]);
 }
 
 void Shader::setVec4(const std::string &name, const glm::vec4 &value) const {
     if (ID == 0) return;
-    glUniform4fv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
+    glUniform4fv(location(name), 1, &value[0]);
 }
 
 void Shader::checkCompileErrors(unsigned int shader, std::string type)

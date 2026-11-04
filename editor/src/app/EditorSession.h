@@ -40,12 +40,16 @@ private:
     PanelVisibility panels;
 
     bool layoutPending;
+    std::string appliedUiFont;
 
     bool mouseCaptured = false;
     bool windowWasFocused = false;
     double lastCursorX = 0.0;
     double lastCursorY = 0.0;
 
+    int windowedX = 0, windowedY = 0, windowedWidth = 1600, windowedHeight = 960;
+
+    void applyFullscreen(bool wanted);
     void updateMouseCapture();
     void addMouseLook(GameInput& input);
 };

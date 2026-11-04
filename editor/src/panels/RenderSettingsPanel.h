@@ -9,6 +9,8 @@ public:
 
 private:
     void drawRendering(EditorContext& ctx);
-    void drawRetro(EditorContext& ctx);
+    void drawImage(EditorContext& ctx);
+    void drawPost(EditorContext& ctx);
     void drawEnvironment(EditorContext& ctx);
+    void drawInterface(EditorContext& ctx);
 };

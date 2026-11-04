@@ -44,12 +44,13 @@ AssetKind classifyAsset(const fs::path& path) {
     if (extension == ".mat" || extension == ".mtl") return AssetKind::Material;
     if (extension == ".wav" || extension == ".mp3" || extension == ".ogg") return AssetKind::Audio;
     if (extension == ".lua" || extension == ".cpp" || extension == ".h") return AssetKind::Script;
+    if (extension == ".ttf" || extension == ".otf") return AssetKind::Font;
     return AssetKind::Other;
 }
 
 bool isImportable(const fs::path& path) {
     const AssetKind kind = classifyAsset(path);
-    return kind == AssetKind::Texture || kind == AssetKind::Model;
+    return kind == AssetKind::Texture || kind == AssetKind::Model || kind == AssetKind::Font || kind == AssetKind::Audio;
 }
 
 fs::path uniquePath(const fs::path& folder, const std::string& fileName) {
@@ -93,15 +94,15 @@ ImportResult importAsset(const Project& project, const fs::path& source, const f
             result.error = "Cannot import " + source.filename().u8string() + ": " + parseError;
             return result;
         }
-    } else {
+    } else if (kind != AssetKind::Font && kind != AssetKind::Audio) {
         result.error = "Cannot import " + source.filename().u8string() +
-                       ": the supported formats are PNG, JPEG, TGA, BMP and HDR textures, and OBJ models.";
+                       ": the supported formats are PNG, JPEG, TGA, BMP and HDR textures, OBJ models, WAV sounds and TTF or OTF fonts.";
         return result;
     }
 
     fs::path folder = destination;
     if (sameFile(folder, project.assetsDir())) {
-        folder = project.assetsDir() / (kind == AssetKind::Texture ? "Textures" : "Models");
+        folder = project.assetsDir() / (kind == AssetKind::Texture ? "Textures" : kind == AssetKind::Font ? "Fonts" : kind == AssetKind::Audio ? "Audio" : "Models");
     }
     fs::create_directories(folder, ec);
 

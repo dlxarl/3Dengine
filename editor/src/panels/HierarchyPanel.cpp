@@ -10,6 +10,7 @@
 #include <cstdint>
 
 namespace {
+    const size_t MAX_OPEN_CHILDREN = 40;
     const float ICON_SIZE = 14.0f;
 
     bool matchesFilter(const std::string& name, const std::string& filter) {
@@ -43,6 +44,24 @@ void drawCreateObjectItems(EditorContext& ctx, ObjectId parent) {
     }
 
     if (ImGui::MenuItem("Camera")) ctx.createObject(ObjectType::Camera, parent);
+    if (ImGui::MenuItem("Audio Source")) ctx.createObject(ObjectType::AudioSource, parent);
+
+    if (ImGui::BeginMenu("Effects")) {
+        if (ImGui::MenuItem("Particles")) ctx.createObject(ObjectType::Particles, parent);
+        if (ImGui::MenuItem("Fire")) ctx.createObject(ObjectType::Fire, parent);
+        if (ImGui::MenuItem("Water")) ctx.createObject(ObjectType::Water, parent);
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("2D")) {
+        for (const char* what : {"Panel", "Text", "Image", "Bar", "Button"}) {
+            if (ImGui::MenuItem(what)) ctx.createUi(what, parent);
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("HUD")) ctx.createUi("HUD", parent);
+        if (ImGui::MenuItem("Menu")) ctx.createUi("Menu", parent);
+        ImGui::EndMenu();
+    }
 
     // The game rules drive one player, for the same reason.
     const bool hasPlayer = ctx.scene().getPlayer() != nullptr;
@@ -252,8 +271,9 @@ void HierarchyPanel::drawRow(EditorContext& ctx, SceneObject& object) {
     ImGui::PushID((int)object.id);
 
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
-                               ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding |
-                               ImGuiTreeNodeFlags_DefaultOpen;
+                               ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding;
+    // Groups start open, unless they hold so much that the list would be all one group.
+    if (object.getChildren().size() <= MAX_OPEN_CHILDREN) flags |= ImGuiTreeNodeFlags_DefaultOpen;
     if (object.getChildren().empty()) flags |= ImGuiTreeNodeFlags_Leaf;
     if (object.id == ctx.selectedObject) flags |= ImGuiTreeNodeFlags_Selected;
 

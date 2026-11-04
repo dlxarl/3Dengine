@@ -117,6 +117,18 @@ void Icons::light(ImDrawList* draw, ImVec2 center, float radius, ImU32 color) {
     }
 }
 
+void Icons::speaker(ImDrawList* draw, ImVec2 center, float size, ImU32 color) {
+    const Grid g = gridFor(ImVec2(center.x - size / 2, center.y - size / 2), size);
+    const float t = g.len(1.1f);
+    draw->PathLineTo(g.at(2, 6)); draw->PathLineTo(g.at(5, 6)); draw->PathLineTo(g.at(9, 2.5f));
+    draw->PathLineTo(g.at(9, 13.5f)); draw->PathLineTo(g.at(5, 10)); draw->PathLineTo(g.at(2, 10));
+    draw->PathStroke(color, ImDrawFlags_Closed, t);
+    draw->PathArcTo(g.at(9, 8), g.len(3.2f), -0.9f, 0.9f, 8);
+    draw->PathStroke(color, 0, t);
+    draw->PathArcTo(g.at(9, 8), g.len(5.6f), -0.9f, 0.9f, 10);
+    draw->PathStroke(color, 0, t);
+}
+
 void Icons::camera(ImDrawList* draw, ImVec2 center, float size, ImU32 color) {
     const Grid g = gridFor(ImVec2(center.x - size * 0.5f, center.y - size * 0.5f), size);
     draw->AddRectFilled(g.at(1.5f, 4.5f), g.at(10.5f, 11.5f), color, g.len(1.0f));
@@ -154,6 +166,14 @@ void Icons::object(ImDrawList* draw, ImVec2 pos, float size, ObjectType type, Im
         case ObjectType::Camera:
             camera(draw, g.at(8, 8), size, color);
             break;
+        case ObjectType::AudioSource:
+            speaker(draw, g.at(8, 8), size, color);
+            break;
+        case ObjectType::Ui:
+            draw->AddRect(g.at(2.5f, 3.5f), g.at(13.5f, 12.5f), color, g.len(1.2f), 0, g.len(0.9f));
+            draw->AddLine(g.at(4.5f, 6.5f), g.at(9.5f, 6.5f), color, g.len(0.9f));
+            draw->AddLine(g.at(4.5f, 9.5f), g.at(7.5f, 9.5f), color, g.len(0.9f));
+            break;
         case ObjectType::Empty:
             draw->AddRect(g.at(3.5f, 3.5f), g.at(12.5f, 12.5f), color, 0.0f, 0, g.len(0.8f));
             break;
@@ -180,6 +200,28 @@ void Icons::object(ImDrawList* draw, ImVec2 pos, float size, ObjectType type, Im
             draw->AddLine(g.at(8, 2), g.at(8, 9), color, g.len(0.8f));
             draw->AddLine(g.at(8, 9), g.at(14, 13), color, g.len(0.8f));
             draw->AddLine(g.at(8, 9), g.at(2, 13), color, g.len(0.8f));
+            break;
+        case ObjectType::Particles:
+            for (int i = 0; i < 7; i++) {
+                const float angle = float(i) * 0.9f;
+                draw->AddCircleFilled(g.at(8 + 3.5f * std::cos(angle) * (0.4f + 0.12f * i), 13 - 1.6f * i), g.len(0.9f + 0.12f * i), color, 10);
+            }
+            break;
+        case ObjectType::Fire:
+            draw->PathLineTo(g.at(8, 1.5f));
+            draw->PathBezierCubicCurveTo(g.at(13, 6), g.at(13, 13), g.at(8, 14.5f));
+            draw->PathBezierCubicCurveTo(g.at(3, 13), g.at(3, 7), g.at(8, 1.5f));
+            draw->PathStroke(color, ImDrawFlags_Closed, t);
+            draw->AddCircle(g.at(8, 11), g.len(2.2f), color, 12, g.len(0.8f));
+            break;
+        case ObjectType::Water:
+            for (int row = 0; row < 3; row++) {
+                const float y = 5.0f + 3.4f * row;
+                draw->PathLineTo(g.at(1.5f, y));
+                draw->PathBezierCubicCurveTo(g.at(4, y - 2.4f), g.at(6, y - 2.4f), g.at(8, y));
+                draw->PathBezierCubicCurveTo(g.at(10, y + 2.4f), g.at(12, y + 2.4f), g.at(14.5f, y));
+                draw->PathStroke(color, 0, g.len(0.9f));
+            }
             break;
         case ObjectType::Cube:
         default:
@@ -432,7 +474,9 @@ bool assetSlot(const char* label, std::string& assetPath, AssetKind accepted) {
 
     const std::string fileName = assetPath.empty() ? std::string()
                                                    : std::filesystem::u8path(assetPath).filename().u8string();
-    const char* hint = accepted == AssetKind::Texture ? "Drag a texture here" : "Drag an asset here";
+    const char* hint = accepted == AssetKind::Texture ? "Drag a texture here"
+                       : accepted == AssetKind::Audio ? "Drag a .wav sound here"
+                       : accepted == AssetKind::Font ? "Inter (drag a .ttf font to change)" : "Drag an asset here";
 
     const ImVec2 pos = ImGui::GetCursorScreenPos();
     const float height = ImGui::GetFrameHeight();

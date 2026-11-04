@@ -8,7 +8,7 @@
 using ObjectId = uint32_t;
 constexpr ObjectId InvalidObjectId = 0;
 
-enum class ObjectType { Empty, Cube, Plane, Sphere, Cylinder, Mesh, Light, Camera, Player };
+enum class ObjectType { Empty, Cube, Plane, Sphere, Cylinder, Mesh, Light, Camera, Player, Particles, Fire, Water, AudioSource, Ui };
 
 // Anything that lives in a scene: a stable identity, a name, a transform and a place in the
 // hierarchy. A plain SceneObject is an empty group node; Shape adds geometry.
@@ -34,6 +34,9 @@ public:
     ObjectId id = InvalidObjectId;
     std::string name;
     bool visible = true;
+
+    // The class name of the script this object runs while the scene plays; empty for none.
+    std::string script;
 
     SceneObject* getParent() const { return parent; }
     const std::vector<SceneObject*>& getChildren() const { return children; }

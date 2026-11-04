@@ -15,7 +15,7 @@ EditorExit EditorApp::run() {
     GlWindow::Config config;
     config.width = 1600;
     config.height = 960;
-    config.title = project.getInfo().name + " - 3D Engine";
+    config.title = project.getInfo().name + " - Aureon Editor";
     GlWindow window(config);
     if (!window.isValid()) return EditorExit::Quit;
 
@@ -51,7 +51,7 @@ EditorExit EditorApp::run() {
         glfwSwapBuffers(window.handle());
 
         const std::string title = (ctx.document.isDirty() ? "* " : "") + ctx.document.getDisplayName() + " - " +
-                                  project.getInfo().name + " - 3D Engine";
+                                  project.getInfo().name + " - Aureon Editor";
         if (title != windowTitle) {
             windowTitle = title;
             glfwSetWindowTitle(window.handle(), title.c_str());

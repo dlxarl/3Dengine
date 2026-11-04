@@ -1,8 +1,8 @@
-# 3D Engine
+# Aureon Engine
 
 **A real-time 3D engine and desktop editor built with C++, OpenGL, GLFW and Dear ImGui.**
 
-3D Engine is a C++17 graphics project focused on real-time rendering, scene management, object transformations, lighting, shadows and collision-based physics, with retro rendering inspired by the PlayStation 1 and PlayStation 2 as its direction.
+Aureon Engine is a C++17 graphics project focused on real-time rendering, scene management, object transformations, lighting, shadows and collision-based physics, with retro rendering inspired by the PlayStation 1 and PlayStation 2 as its direction.
 
 The repository holds three things:
 
@@ -23,6 +23,15 @@ The repository holds three things:
 - Motion blur post-processing shader.
 - FPS counter and optional frame-rate limiting.
 - Retro rendering: low internal resolution, per-vertex lighting, affine texture mapping, vertex snapping, texture filter control, color quantization and ordered dithering.
+- Sunlight: a directional light whose shadows follow the camera across a large world, in steps of whole shadow-map texels so that their edges do not crawl.
+- A day and night cycle that moves the sun and moon and changes the sky, ambient light and fog.
+- Cut-out transparency for plants, glowing surfaces for windows, lanterns and fire, and swelling water that mirrors the sky and catches the sun.
+- Fires, lanterns and lit windows that light what is near them: the eight nearest to the camera, per vertex in the retro modes as the PlayStation did it, with a slight flicker.
+- Under the sun: light from the sky above and the ground below, sunlight that wraps a little round surfaces, and haze that glows towards the sun.
+- An optional gradient sky: the fog color at the horizon deepening overhead, drifting clouds, the sun or the moon, and stars at night.
+- Trees and plants that bend in the wind.
+- Image grading: saturation and a vignette, before color quantization.
+- Frustum and fog-distance culling, and cached uniform locations, for scenes with thousands of objects.
 
 ### Geometry and scene management
 - Reusable shape base class and scene abstraction.
@@ -39,7 +48,11 @@ The repository holds three things:
 
 ### Physics and interaction
 - Basic gravity and velocity integration.
-- Game rules driven by scene data: a player, pickups, a goal and patrolling hazards.
+- Movable objects that fall, land flush on terrain and on each other, slide to rest, and can be pushed or knocked about.
+- Colliders that can be turned about the vertical axis, so that buildings and walls can stand at any angle, sorted into a grid so that a world of thousands of them stays fast.
+- A character controller with acceleration, sliding along walls and round their corners, step climbing, a slope limit, sprinting, fall damage, swimming and being knocked back.
+- People and animals that walk round walls, steep ground and deep water, keep out of each other's way and step aside for the player; birds and dragons that fly.
+- Game rules driven by scene data, from a course of pickups to an open world with quests, dialogue, trade, levels, combat and wildlife.
 - Collision checks between objects.
 - Static and dynamic scene objects.
 - First-person player movement.
@@ -58,7 +71,8 @@ The demo starts in `DemoPhysics`. Pass `--basic` to run `DemoScene` instead.
 | `W` `A` `S` `D` | Move the player |
 | `Left Shift` | Run |
 | `C` | Crouch |
-| `Space` | Jump |
+| `Space` | Jump; rise when swimming |
+| `Ctrl` or `C` | Dive, in deep water |
 | `Mouse` | Look around |
 | `Mouse Wheel` | Adjust camera field of view |
 | `N` | Select the next scene object |
@@ -168,7 +182,7 @@ Run the demo, from any directory:
 
 The launcher opens first. It lists recent projects with their details, creates new projects from a template, and opens existing ones. Projects live wherever you choose, independent of the engine, and the Editor refuses locations inside its own bundle or source tree.
 
-The list and the last used location are kept per user, in `~/Library/Application Support/3D Engine`.
+The list and the last used location are kept per user, in `~/Library/Application Support/Aureon`.
 
 ### Project layout
 
@@ -203,16 +217,68 @@ Every control is connected: `tests/render_tests.cpp` checks that each render set
 | --- | --- |
 | Rendering Mode | Modern shades per pixel. PS1 lights per vertex and maps textures affinely. PS2 lights per vertex with perspective-correct textures. Selecting a mode also loads a matching set of the settings below. |
 | Internal Resolution | Lines rendered before upscaling, with nearest-neighbor pixels. Width follows the viewport's shape. |
-| Texture Filtering | Nearest, bilinear or trilinear, for all material textures. |
+| Texture Filtering | Nearest, bilinear or trilinear, for all material textures. Nearest, mipmapped keeps square texels up close and uses smaller copies of the texture further off, so that distant ground does not sparkle. |
 | Color Quantization | Bits of color for the final image. |
 | Dithering | A 4x4 Bayer pattern in internal-resolution pixels. Needs quantization. |
 | Vertex Precision | Snaps vertices to a screen grid, for the wobble of early 3D. |
+| Saturation, Vignette | Strength of color, and darkening towards the corners. |
 
 Lighting, shadows and motion blur are also available there.
+
+#### Post-processing
+
+Render Settings also holds a cinematic stack, in collapsible sections. Every effect has its own switch and costs nothing while off: its passes are not run and its buffers are not allocated. The scene is rendered into an HDR buffer when tone mapping or bloom is on, and with a normal buffer when SSAO is on; the passes then ping-pong between two buffers: SSAO, depth of field, motion blur, grade (bloom, tone mapping, color), FXAA, and a final pass for the lens, vignette, grain and the retro screen. The settings are saved in `ProjectSettings/Graphics.json` under `post`.
+
+| Section | Effects |
+| --- | --- |
+| Tone Mapping & Color Grading | Tone mapping (None, Reinhard, Neutral, ACES), exposure, contrast, color filter, saturation, white balance, split toning. |
+| Camera & Optics | Bloom (threshold, soft knee, intensity, scatter, over a 5-level dual-filter pyramid), depth of field (focal distance, range, max blur, near and far), vignette (intensity, smoothness, roundness), motion blur strength. |
+| Lens Artifacts | Chromatic aberration, lens distortion (barrel or pincushion), film grain. |
+| Screen Space Lighting | SSAO with a 16 or 32 sample hemisphere kernel, a 4x4 noise tile and a depth-aware blur. |
+| Anti-Aliasing | FXAA 3.11. |
+| Retro / Stylized | Color quantization, dithering, scanlines, CRT curvature, phosphor glow. |
+
+Colors are graded as the engine renders them, without a gamma conversion, so exposure and tone mapping act on display values.
+
+### Effects: water, fire and particles
+
+Water, fire and particle streams are objects of their own (Hierarchy, **Create > Effects**), not textures on geometry. They are placed, named, parented, saved with the scene and edited in the Inspector, and they run in the Scene view as well as in Play.
+
+| Object | What it is |
+| --- | --- |
+| Particles | A stream of soft camera-facing discs: rate, lifetime, speed, spread, gravity, drag, turbulence, size and a three-color fade over life, additive (glowing) or alpha blended. Simulated on the CPU and drawn as one instanced call per stream, against the scene's depth. |
+| Water mesh | A mesh with the Water game role (a river) is drawn with the same waves, current and sky reflection as a Water object, translucent, and its waves depend on world position so that pieces meet without a seam. |
+| Audio Source | A WAV clip placed in the world (Create > Audio Source). Settings: clip (drag a sound from the Project panel), volume, pitch and random pitch variation, loop, 3D sound with near and far distance (the viewport draws both as rings while it is selected), fade in, start delay, repeat interval for a sound that does not loop, and mute. It starts with the scene in Play mode and in a built game; the Inspector's Preview button plays it in the editor. Clips under Assets are found by their asset path. |
+| 2D elements | Create > 2D adds Panel, Text, Image, Bar and Button elements, or a ready-made HUD or Menu. They are laid out in pixels inside their parent element (anchor, size, offset, or fill the parent), scale with the window, and are drawn over the Game view in hierarchy order. A Bar can follow Health or Stamina by itself; Buttons expose `hovered` and `pressed` to scripts. |
+| Player | A new Player has no game of its own: it stays where it is until a script moves it. The Player section's "Game controls" switch gives it the engine's game (walking, camera, combat, HUD), which is what scenes from before the option still use. |
+| Scripts | A script is a C++ class in Assets (`AUREON_SCRIPT(Name)`, see `Script.h`) with `onStart` and `onUpdate`. Create one from a template (PlayerControl, Spinner, EmptyScript) with right-click > New script in the Project panel, then choose it under an object's Script. Play compiles the project's scripts with `clang++` and loads them; a scene whose scripts do not compile does not play. |
+| Game UI font | Inter, bundled. Render Settings > Game UI > Font takes any .ttf or .otf from the project. |
+| Fullscreen preview | Play > Play fullscreen (Shift+Cmd+F) or the Fullscreen button: the game fills the screen with no panels. Esc releases the mouse, then leaves. The menu bar is repeated in the macOS system menu. |
+| Fire | Flames, smoke and sparks built from a few numbers (size, intensity, smoke, sparks), and a flickering light that falls on what is near. It is one of the lights the lighting shader uses, nearest first. In a game with combat, standing in the flames costs health (Damage / s, 8 by default, 0 makes it harmless); swimming puts it out. |
+| Water | A surface of a given size (a rectangle, or the ellipse inside it) at the object's height, with rolling waves, drifting ripples, a current, sky reflection, sun glints and a different look from below. Its outline is also what the player swims and dives in. |
+
+Water is as wide as `size` times the object's scale; it is not rotated. Meshes with the Water role still work as before, for shapes that a rectangle or an ellipse cannot follow, such as a river.
+
+**Diving.** In water deeper than the player, `Ctrl` or `C` dives and keeps going down, `W` swims where the camera looks, `Space` rises, and reaching the surface ends the dive. The third-person camera goes under with the diver. Under the surface there are 20 seconds of air, shown as a bar; without it the player is hurt each second until they come up. While the camera is under water, one extra pass shows it: red is absorbed first, distance turns to the water's color, the picture wobbles, and light shimmers from above. It runs only then.
 
 ### Play mode
 
 Play takes a snapshot of the scene, runs the engine's physics and game rules on it and switches to the Game view. Stop restores the snapshot, so nothing done during play reaches the saved scene. Objects with Gravity fall and collide with what has Collision.
+
+### Sound
+
+Play mode has sound when the project has an `Assets/Audio` folder; without it a game is silent. Files are WAV (8, 16 or 24 bit PCM, or 32 bit float; mono or stereo) and are found by name, so a game only needs the ones it wants:
+
+| Folder | Files | Heard |
+| --- | --- | --- |
+| `player/` | `grass`, `stone`, `wood`, `sand`, `snow` `-step1` and `-step2`; `pick-sword-inventory` | Footsteps for the surface underfoot (snow high up, sand along the water, wood in houses and on bridges and docks, stone in chapels, towers and the cobbled heart of a town, grass elsewhere); picking things up and changing weapon. |
+| `weapon/` | `sword1`, `sword2`, `metal-hit1`, `metal-hit2`, `arrow` | Swings, blows that land, arrows, being hurt. |
+| `animals/`, `horse/` | `attacking-wolf` (to `3`), `crow` (to `3`), `deer`, `deer-snort`, `sheep`, `pigeons`; `horse-snort`, `horse-snort2`, `horse-galloping` | Creatures attacking, hurt, dying or taking fright, in the world where they are; crows, sheep and horses now and then; hooves while riding. |
+| `outdoor/` | `river`, `lake`, `fire` | Only what is really there: no background noise in the countryside. |
+| `town/` | `town-ambience`, `crowd`, `ambience-music`, `church-bell` | Town noise near houses, stalls and wells; music only from a character named Minstrel, Bard or Musician, while they live; the bell tolls at 6, 12 and 18 from the nearest Chapel. |
+| `sfx/` | `string-and-stomp`, `string-and-stomp2` | Being defeated, and gaining a level. |
+
+Places carry their own sound by name: objects named `River...` or `Lake...`, or ending in `Fire`, play theirs from where they stand, getting louder as the player nears and panned to the side they are on. `GameAudio` turns what `GameSession` reports into sound, and `AudioEngine` mixes it: it needs an output device, which it opens through CoreAudio on macOS and does not yet on other platforms, where a game is silent.
 
 ### Making a game
 
@@ -224,18 +290,74 @@ Any scene with a **Player** object is playable, with no code. Create one from th
 | Goal | Wins the game once every pickup is collected. |
 | Hazard | Sends the player back to the start. Patrol makes it swing back and forth. |
 
-The player also goes back to the start after falling 14 units below it, keeping what they collected. The Game view shows a counter and a timer, and the first camera in the scene follows the player.
+Without terrain, the player also goes back to the start after falling 14 units below it, keeping what they collected. The Game view shows a counter and a timer, and the first camera in the scene follows the player.
 
 | Key, in the Game view | Action |
 | --- | --- |
 | `W` `A` `S` `D` or arrows | Move, relative to the camera |
 | `Space` | Jump |
 | `Q` `E`, or right mouse button | Turn the camera |
-| Mouse | Look around, in first person. Click the view to capture the mouse, `Esc` to free it |
+| Mouse | Look around. Click the view to capture the mouse, `Esc` to free it |
 | `V` | Switch between first and third person |
+| `Shift` | Run, while stamina lasts |
+| Click, `1` `2` | Attack; sword or bow |
+| `F` | Talk, take, open, read, sleep, ride or get down |
+| `1` to `9` | Choose a reply in a conversation |
+| `H` | Drink the best potion carried |
+| `Tab`, `J` | The bag, the journal |
 | `R` | Restart |
 
 Tick **First person** on the camera in the Inspector to start a game in that view.
+
+Larger worlds come from more roles:
+
+| Role | In play |
+| --- | --- |
+| Ground | A mesh to walk on, such as a terrain or a bridge deck. Several pieces make one ground; its edges are the world's edges. |
+| Water | The surface of deep water, where the player swims. A river can be made of pieces at different heights. |
+| Villager | Wanders near where it was placed, goes home at night and runs from danger. One named in the game data can be talked to. |
+| Bandit | Chases and strikes the player on sight. Without quests, defeating them all wins the game. |
+| Wolf | Hunts in packs and sees further at night. |
+| Boar, Bear | Charge whoever comes too close. A bear is slow to notice and hits much harder. |
+| Deer, Rabbit, Livestock | Deer and rabbits bolt when the player comes near; livestock only runs when hurt. |
+| Bird | Pecks about, and takes to the air when disturbed, circling before it settles again. |
+| Dragon | Sleeps where it is placed until the player comes near. Then it flies: it circles, breathes fire and swoops to bite, and once badly hurt it lands to fight on the ground. Far from the player, it flies home and heals. |
+| Fireball | What dragons breathe. Add a few, hidden until a dragon needs them; with a light range, they light the ground as they fly. |
+| Horse | Ridden with `F`, at about twice the speed. |
+| Player body | The player's visible model. The Player object is then only its collider. |
+| Sword, Bow, Arrow | Weapons in the player's hands, which turn on health and combat, and the arrows the bow fires. |
+| Item | Taken with `F`. Its parameter names the item: `moonleaf` or `moonleaf:2`. |
+| Chest | Opened once with `F`. Its parameter lists the contents: `potion:2, gold:25`. |
+| Bed | Sleeping passes the night and restores health, unless enemies are near. |
+| Sign | Read with `F`; its parameter is the text. |
+| Limb | Swings with its parent's walk, by its Swing and Phase: forward and back like a leg, side to side like a tail, or up and down like a wing. |
+| Night glow | Lit from dusk to dawn, like a window. |
+
+Meshes do not block anyone by themselves: place invisible cubes as colliders, turned to match a building if it stands at an angle. A cube that is not Static, with Gravity and Collision, is a movable prop. Fog, ambient light and the gradient sky are set per scene, in Render Settings. In the Inspector, Sway bends an object in the wind, and Light range makes an emissive object light what is near it.
+
+#### Game data
+
+Quests, items, conversations and time live in the scene file, in a `game` section next to the objects:
+
+```json
+"game": {
+  "world": { "dayMinutes": 16, "startHour": 8.5, "startGold": 15,
+             "startItems": [{ "item": "arrow", "count": 15 }] },
+  "items": [{ "id": "wolf_pelt", "name": "Wolf Pelt", "kind": "pelt", "value": 9 }],
+  "characters": [{ "name": "Shepherd Tom", "lines": ["Mind the sheep."] }],
+  "quests": [{ "id": "wolves", "title": "Wolves at the Fold", "giver": "Shepherd Tom",
+               "objective": "collect", "target": "wolf_pelt", "count": 3,
+               "offer": "Bring me three pelts.", "progress": "Three pelts.", "complete": "My flock can sleep tonight.",
+               "rewardGold": 45, "rewardXp": 80 }]
+}
+```
+
+- **Characters** are matched to Villager objects by name. They keep to their place unless `"stays": false`, can sell (`"sells"`) and buy pelts, meat and valuables (`"buys": true`).
+- **Quests** are offered by their `giver` and handed in to `turnIn`, which defaults to the giver. `after` makes one wait for another. Objectives are `talk` (to a character), `reach` (an object by name), `collect` (items, handed over at the end) and `kill` (a role such as `wolf`, or the start of a name such as `Raider`).
+- **Items** have a `kind`. `potion` heals with `H`, `weapon` raises sword damage, and `pelt`, `meat` and `valuable` can be sold. With an `arrow` item defined, the bow uses arrows from the bag.
+- Defeated wolves leave a `wolf_pelt`, deer `venison`, boars a `boar_tusk`, bears a `bear_pelt`, rabbits a `rabbit_pelt` and dragons `dragon_scale`, when the game defines those items. Experience raises the player's level, which brings more health and harder blows.
+
+Losing all health returns the player to the start, with a tenth of their gold lost.
 
 ### Keyboard and mouse
 
@@ -260,7 +382,8 @@ Dependencies point one way: `editor` uses `engine`, and `engine` knows nothing a
 - **Renderer** runs a frame: a shadow pass, the scene pass at the internal resolution, then a post-process pass into the output. The demo and the Editor share it.
 - **Scene** is the interface the renderer draws. **SceneGraph** is its data-driven implementation, and the demo scenes are hand-written ones.
 - **SceneObject** gives everything in a scene an id, a name, a transform and a place in the hierarchy. **Shape** adds geometry, and **LightObject** and **CameraObject** are objects too.
-- **GameSession** applies the game rules to a scene from objects' roles, taking input as plain data, so it depends on neither the Editor nor a keyboard.
+- **GameSession** applies the game rules to a scene from objects' roles, taking input as plain data, so it depends on neither the Editor nor a keyboard. It brings together **CharacterController** (the player's movement), **GameActors** (people, animals and arrows), **GameProgress** (inventory, quests, conversations and experience, with no knowledge of the scene) and **GameClock** (time of day, sky and sun).
+- **Physics** moves props, pushing them out of what they run into by the shortest way; the demo keeps its original response. **ColliderGrid** sorts the solids of a world by place, for the controller, the actors, the props, arrows and the camera.
 - **SceneSerializer** reads and writes scene files. **AssetManager** loads assets by project-relative path.
 - **Engine** is the runtime loop for standalone executables. The Editor has its own, in **EditorApp**.
 - **EditorSession** draws one frame of the whole UI and leaves the event loop to its caller, which is what lets the tests run the real UI with scripted input.
@@ -277,7 +400,7 @@ ctest --test-dir build
 | Suite | Covers | Needs a display |
 | --- | --- | --- |
 | `project_tests` | Project creation and validation, relocation, recent projects, asset paths, import, the OBJ loader | No |
-| `render_tests` | Each render setting on the real pipeline, picking, hierarchy, serialization, physics, game rules, Play mode | Yes |
+| `render_tests` | Each render setting on the real pipeline, picking, hierarchy, serialization, physics and props, the character controller, game rules, quests, trade, interactions, wildlife, dragons and birds, turned colliders, terrain in pieces, rivers, day and night, cut-outs, glow, point lights, water, following shadows, culling, Play mode | Yes |
 | `ui_tests` | The real UI in a hidden window with scripted mouse and keyboard: selection, drag and drop, renaming, shortcuts, gizmos, asset drops, Play, game controls, the unsaved changes dialog | Yes |
 
 Suites that need a display report as skipped when there is none.
@@ -289,6 +412,8 @@ Suites that need a display report as skipped when there is none.
 - **Undo and redo.** Deleting an object cannot be reversed, except by reopening the saved scene.
 - **Scripts.** Games are limited to the built-in roles. The `Scripts` and `Audio` folders exist, but the engine does not run scripts or play sound.
 - **Standalone games.** A game runs in the Editor's Game view; there is no export to an executable.
+- **Saving progress.** Stopping Play mode ends the run; there is no save game.
+- **Editing quests in the Editor.** Game data is edited in the scene file; the Editor keeps it when it saves, but has no panel for it.
 - **Materials.** Objects have a color and one albedo texture. Importing an OBJ also copies its `.mtl`, but the engine does not read it.
 - **Model formats other than OBJ.**
 - **More than one light.** The renderer uses the first light in the scene, and the Editor says so instead of offering a second.
@@ -297,7 +422,10 @@ Suites that need a display report as skipped when there is none.
 
 ### Limits worth knowing
 
-- Physics is a lightweight demonstration. Collisions compare axis-aligned boxes and ignore rotation.
+- Colliders are boxes, turned only about the vertical axis; a box tilted further is held by the upright box around it. Props do not tumble or rotate.
+- People and animals turn aside when something is in their way, but do not plan a path: a long wall with one gap can keep them on the wrong side.
+- Only the eight point lights nearest the camera shine, and they cast no shadows.
+- The third-person camera stops short of colliders, but not of tree crowns, which have no collider.
 - Nothing watches the disk continuously: the Project panel rescans every two seconds while it has focus.
 - The Scene view renders with the project's render settings, so retro settings apply there too. The grid and gizmos stay at full resolution.
 

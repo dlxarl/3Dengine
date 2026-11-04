@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(3D_Engine VERSION 1.0.0 LANGUAGES CXX C)
+project(Aureon VERSION 1.0.0 LANGUAGES CXX C)
 
 if (APPLE)
     enable_language(OBJC OBJCXX)

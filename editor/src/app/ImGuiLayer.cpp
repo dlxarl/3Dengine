@@ -15,15 +15,16 @@
 
 namespace {
     const float UI_FONT_SIZE = 14.0f;
+    const float GAME_FONT_SIZE = 48.0f;  // Loaded large enough for the biggest HUD text; ImGui scales down cleanly.
 
-    ImFont* loadFont(const char* fileName) {
+    ImFont* loadFont(const char* fileName, float size) {
         const std::string path = Resources::path(std::string("fonts/") + fileName);
         std::error_code ec;
         if (!std::filesystem::exists(path, ec)) {
             Log::warn("Editor", "Font not found, using the built-in one: " + path);
             return nullptr;
         }
-        return ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), UI_FONT_SIZE);
+        return ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), size);
     }
 }
 
@@ -38,16 +39,36 @@ ImGuiLayer::ImGuiLayer(GLFWwindow* window, const std::string& layoutFile) : layo
     io.ConfigDragClickToInputText = true;
     io.IniFilename = layoutPath.empty() ? nullptr : layoutPath.c_str();
 
-    ui = loadFont("Roboto-Medium.ttf");
-    mono = loadFont("Cousine-Regular.ttf");
+    ui = loadFont("Roboto-Medium.ttf", UI_FONT_SIZE);
+    mono = loadFont("Cousine-Regular.ttf", UI_FONT_SIZE);
+    game = bundledGame = loadFont("Inter.ttf", GAME_FONT_SIZE);
     if (!ui) ui = io.Fonts->AddFontDefault();
     if (!mono) mono = ui;
+    if (!game) game = bundledGame = ui;
     io.FontDefault = ui;
 
     Theme::apply();
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330 core");
+}
+
+ImFont* ImGuiLayer::setGameFont(const std::string& path) {
+    ImFont* chosen = bundledGame;
+    std::error_code ec;
+    if (!path.empty() && std::filesystem::exists(path, ec)) {
+        if (ImFont* loaded = ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), GAME_FONT_SIZE)) {
+            chosen = loaded;
+        } else {
+            Log::warn("Editor", "Cannot read the font, using Inter: " + path);
+        }
+    } else if (!path.empty()) {
+        Log::warn("Editor", "Font not found, using Inter: " + path);
+    }
+    // An earlier custom font is no longer needed.
+    if (game && game != bundledGame && game != chosen) ImGui::GetIO().Fonts->RemoveFont(game);
+    game = chosen;
+    return game;
 }
 
 ImGuiLayer::~ImGuiLayer() {

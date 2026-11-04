@@ -5,6 +5,9 @@
 #include "PlayController.h"
 #include "Project.h"
 #include "SceneDocument.h"
+#include "ScriptBuilder.h"
+
+#include <chrono>
 
 #include <filesystem>
 #include <functional>
@@ -33,9 +36,13 @@ public:
 
     ViewMode viewMode = ViewMode::Scene;
 
+    // Play mode shown across the whole window, without the editor around it.
+    bool fullscreenPreview = false;
+
     // First-person mouse look. While true, the game owns the mouse and the UI ignores it.
     bool wantsMouseCapture = false;
     ImFont* monoFont = nullptr;
+    ImFont* gameFont = nullptr;
 
     SceneGraph& scene() { return document.getScene(); }
 
@@ -54,6 +61,8 @@ public:
 
     // Objects
     SceneObject* createObject(ObjectType type, ObjectId parent = InvalidObjectId);
+    // A 2D element by name: Panel, Text, Image, Bar, Button, or the ready-made HUD and Menu.
+    SceneObject* createUi(const std::string& what, ObjectId parent = InvalidObjectId);
     SceneObject* addModel(const std::string& assetPath, glm::vec3 position);
     void deleteSelected();
     void duplicateSelected();
@@ -65,8 +74,12 @@ public:
     void openScene(const std::string& assetPath);
     void newScene();
 
+    // The scripts the project declares, read from its source files a moment ago.
+    const std::vector<ScriptInfo>& availableScripts();
+
     // Play mode. The main view follows it: Game while playing, Scene again after.
-    void startPlaying();
+    // fullscreen hides every panel and shows only the game, across the whole screen.
+    void startPlaying(bool fullscreen = false);
     void stopPlaying();
 
     // Project
@@ -89,6 +102,8 @@ private:
     EditorExit exitRequest = EditorExit::None;
     std::string status;
     float graphicsSaveDelay = -1.0f;
+    std::vector<ScriptInfo> scriptList;
+    std::chrono::steady_clock::time_point scriptsScannedAt;
 
     // Runs action, first offering to save the scene when it has unsaved changes.
     void withSavedScene(std::function<void()> action);

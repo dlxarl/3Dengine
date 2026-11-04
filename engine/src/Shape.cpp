@@ -53,6 +53,9 @@ void Shape::bindMaterial(Shader& shader) {
 
     shader.setVec3("objectColor", color);
     shader.setBool("material.tintAlbedo", tintTexture);
+    shader.setBool("material.emissive", emissive);
+    shader.setFloat("waveHeight", waveHeight);
+    shader.setFloat("sway", sway);
     shader.setBool("material.hasAlbedo", false);
     shader.setBool("material.hasNormal", false);
     shader.setBool("material.hasMetallic", false);
@@ -82,6 +85,13 @@ void Shape::bindMaterial(Shader& shader) {
 
         textures[i]->bind(i);
     }
+}
+
+void Shape::getBounds(glm::vec3& center, float& radius) const {
+    // Every primitive fits in a unit cube around its position.
+    const glm::vec3 size = getWorldScale();
+    center = getWorldPosition();
+    radius = 0.87f * std::max(size.x, std::max(size.y, size.z));
 }
 
 bool Shape::checkCollision(Shape& other) {
