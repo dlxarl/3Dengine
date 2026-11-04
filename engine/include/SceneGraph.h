@@ -38,6 +38,7 @@ public:
     glm::vec3 getAmbientColor() const override { return ambientColor; }
     float getAnimationTime() const override { return animationTime; }
     void drawShadowCasters(Shader& depthShader, const glm::mat4& lightSpace) override;
+    int getLights(glm::vec3 eye, SceneLight* out, int most) const override;
     int getPointLights(glm::vec3 eye, glm::vec4* positions, glm::vec3* colors, int most) const override;
     bool hasGradientSky() const override { return gradientSky; }
     void drawEffects(EffectRenderer& renderer) override;

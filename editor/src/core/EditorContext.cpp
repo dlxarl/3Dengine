@@ -1,6 +1,7 @@
 #include "EditorContext.h"
 #include "imgui.h"
 #include "Log.h"
+#include "LightObject.h"
 #include "MeshShape.h"
 #include "ObjectFactory.h"
 #include "ScriptBuilder.h"
@@ -48,6 +49,19 @@ SceneObject* EditorContext::createObject(ObjectType type, ObjectId parent) {
     select(created->id);
     document.markDirty();
     return created;
+}
+
+SceneObject* EditorContext::createLight(int type, ObjectId parent) {
+    static const char* const NAMES[] = {"Point Light", "Spot Light", "Directional Light"};
+    auto* light = dynamic_cast<LightObject*>(createObject(ObjectType::Light, parent));
+    if (!light) return nullptr;
+    light->type = (LightType)std::clamp(type, 0, 2);
+    light->name = scene().makeUniqueName(NAMES[(int)light->type]);
+    light->setPosition(glm::vec3(0.0f, type == 2 ? 10.0f : 3.0f, 0.0f));
+    if (light->type == LightType::Directional) light->setRotation(glm::vec3(-50.0f, 30.0f, 0.0f));
+    if (light->type == LightType::Spot) light->setRotation(glm::vec3(-90.0f, 0.0f, 0.0f));
+    if (light->type == LightType::Directional) light->range = 400.0f;
+    return light;
 }
 
 SceneObject* EditorContext::createUi(const std::string& what, ObjectId parent) {

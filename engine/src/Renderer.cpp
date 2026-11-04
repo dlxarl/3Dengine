@@ -8,7 +8,7 @@ namespace {
     const int SHADOW_TEX_UNIT = 10;
     const unsigned int MATERIAL_TEX_UNITS = 5;
     const float MOTION_BLUR_REFERENCE_FPS = 60.0f;
-    const int MAX_POINT_LIGHTS = 8;
+    const int MAX_LIGHTS = 16;
     const float MIPMAPPED_NEAREST_MAX_LOD = 4.0f;  // further down, the tiles of a texture atlas run together
 
     glm::mat4 lightSpaceFor(glm::vec3 lightPos) {
@@ -162,20 +162,25 @@ void Renderer::render(Scene& scene, const CameraView& camera, const RenderOutput
     lightingShader->setMat4("lightSpaceMatrix", lightSpaceMatrix);
 
     lightingShader->setVec3("viewPos", camera.position);
-    lightingShader->setVec3("lightPos", lightPos);
-    lightingShader->setVec3("lightColor", scene.getLightColor());
+        lightingShader->setVec3("lightColor", directional ? scene.getLightColor() : glm::vec3(0.0f));
     lightingShader->setBool("directionalLight", directional);
     lightingShader->setVec3("lightDirection", lightDirection);
     lightingShader->setVec3("ambientColor", scene.getAmbientColor());
     lightingShader->setFloat("time", scene.getAnimationTime());
 
-    glm::vec4 pointPositions[MAX_POINT_LIGHTS];
-    glm::vec3 pointColors[MAX_POINT_LIGHTS];
-    const int pointCount = settings.lighting ? scene.getPointLights(camera.position, pointPositions, pointColors, MAX_POINT_LIGHTS) : 0;
-    lightingShader->setInt("pointLightCount", pointCount);
-    for (int i = 0; i < pointCount; i++) {
-        lightingShader->setVec4("pointLights[" + std::to_string(i) + "]", pointPositions[i]);
-        lightingShader->setVec3("pointLightColors[" + std::to_string(i) + "]", pointColors[i]);
+    // The sun is the first light when it is directional; every other light goes in the list.
+    SceneLight lights[MAX_LIGHTS];
+    const int lightTotal = settings.lighting ? scene.getLights(camera.position, lights, MAX_LIGHTS) : 0;
+    const int firstOther = (lightTotal > 0 && lights[0].type == SceneLight::Directional && directional) ? 1 : 0;
+    const int others = lightTotal - firstOther;
+    lightingShader->setInt("lightCount", others);
+    for (int i = 0; i < others; i++) {
+        const SceneLight& light = lights[firstOther + i];
+        const std::string at = "[" + std::to_string(i) + "]";
+        lightingShader->setVec4("lightPositions" + at, glm::vec4(light.position, light.range));
+        lightingShader->setVec4("lightDirections" + at, glm::vec4(light.direction, (float)light.type));
+        lightingShader->setVec4("lightColors" + at, glm::vec4(light.color, light.specular));
+        lightingShader->setVec4("lightSpots" + at, glm::vec4(light.spotCosOuter, light.spotCosInner, light.castShadows ? 1.0f : 0.0f, light.radius));
     }
 
     const glm::vec2 fog = scene.getFogRange();

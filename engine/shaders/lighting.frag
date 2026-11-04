@@ -25,7 +25,6 @@ struct Material {
 uniform Material material;
 uniform sampler2DShadow shadowMap;
 
-uniform vec3 lightPos;
 uniform vec3 viewPos;
 uniform vec3 lightColor;
 uniform vec3 objectColor;
@@ -35,11 +34,14 @@ uniform vec3 ambientColor;
 uniform float time;
 uniform float waveHeight;
 
-const int MAX_POINT_LIGHTS = 8;
-uniform int pointLightCount;
-uniform vec4 pointLights[MAX_POINT_LIGHTS];
-uniform vec3 pointLightColors[MAX_POINT_LIGHTS];
-const float POINT_LIGHT_STRENGTH = 1.8;   // a fire at night outshines the moon
+// The lights besides the sun (the sun is lightDirection and lightColor): point, spot and extra
+// directional lights, all described the same way.
+const int MAX_LIGHTS = 16;
+uniform int lightCount;
+uniform vec4 lightPositions[MAX_LIGHTS];    // xyz position; w range
+uniform vec4 lightDirections[MAX_LIGHTS];   // xyz the way the light travels; w type: 0 directional, 1 point, 2 spot
+uniform vec4 lightColors[MAX_LIGHTS];       // rgb color with intensity; a how bright its highlights are
+uniform vec4 lightSpots[MAX_LIGHTS];        // x cosine of the cone's edge, y of its bright core; z casts shadows; w radius
 
 uniform int enableLighting;
 uniform int enableShadows;
@@ -132,17 +134,89 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
     return 1.0 - shadow;
 }
 
-vec3 pointLighting(vec3 position, vec3 normal)
+// How much of a point or spot light reaches a distance, smoothly gone at its range.
+float rangeFade(float distance, float range)
+{
+    float reach = distance / range;
+    float fade = clamp(1.0 - reach * reach, 0.0, 1.0);
+    return fade * fade;
+}
+
+// Lambert only, for the retro look that lights per vertex; the light itself is the same.
+vec3 vertexLights(vec3 position, vec3 normal)
 {
     vec3 total = vec3(0.0);
-    for (int i = 0; i < pointLightCount; i++) {
-        vec3 offset = pointLights[i].xyz - position;
-        float distance = length(offset);
-        float reach = distance / pointLights[i].w;
-        float fade = clamp(1.0 - reach * reach, 0.0, 1.0);
-        float flicker = 0.88 + 0.12 * sin(time * 9.0 + float(i) * 2.3) * sin(time * 5.7 + float(i));
-        float facing = max(dot(normal, offset / max(distance, 0.001)), 0.0) * 0.75 + 0.25;
-        total += pointLightColors[i] * POINT_LIGHT_STRENGTH * fade * fade * facing * flicker;
+    for (int i = 0; i < lightCount; i++) {
+        vec3 toLight;
+        float strength = 1.0;
+        if (lightDirections[i].w < 0.5) {
+            toLight = -lightDirections[i].xyz;
+        } else {
+            vec3 offset = lightPositions[i].xyz - position;
+            float distance = length(offset);
+            toLight = offset / max(distance, 0.001);
+            strength = rangeFade(distance, lightPositions[i].w);
+            if (lightDirections[i].w > 1.5)
+                strength *= smoothstep(lightSpots[i].x, lightSpots[i].y, dot(-toLight, lightDirections[i].xyz));
+        }
+        total += lightColors[i].rgb * strength * (max(dot(normal, toLight), 0.0) * 0.75 + 0.25 * step(0.001, strength));
+    }
+    return total;
+}
+
+// Cook-Torrance: a microfacet highlight (GGX distribution, Smith geometry, Schlick's Fresnel)
+// plus the diffuse light the highlight does not take.
+vec3 surfaceLight(vec3 toLight, vec3 radiance, float specular, float intensityScale, vec3 N, vec3 V, float NV,
+                  vec3 albedo, vec3 F0, float metalness, float alpha, float wrap)
+{
+    float NLraw = dot(N, toLight);
+    float NL = max(NLraw, 0.0);
+    vec3 H = normalize(toLight + V);
+    float NH = max(dot(N, H), 0.0);
+    float VH = max(dot(V, H), 0.0);
+
+    float a2 = alpha * alpha;
+    float d = NH * NH * (a2 - 1.0) + 1.0;
+    float D = a2 / (3.14159265 * d * d + 1e-5);
+    float k = (alpha + 1.0) * (alpha + 1.0) / 8.0;
+    float G = (NV / (NV * (1.0 - k) + k)) * (NL / (NL * (1.0 - k) + k));
+    vec3 F = F0 + (1.0 - F0) * pow(1.0 - VH, 5.0);
+
+    vec3 highlight = D * G * F / max(4.0 * NV * NL, 1e-3) * NL * specular;
+    float wrapped = wrap > 0.0 ? max((NLraw + wrap) / (1.0 + wrap), 0.0) : NL;
+    vec3 diffuse = (vec3(1.0) - F) * (1.0 - metalness) * albedo * wrapped;
+    return (diffuse + highlight) * radiance * intensityScale;
+}
+
+// How much of the light gets through to a point: 1 in the open, 0 in shadow.
+float lightShadow(int index, vec3 position, vec3 normal, vec3 toLight, float distanceToLight)
+{
+    return 1.0;
+}
+
+vec3 pixelLights(vec3 position, vec3 N, vec3 V, float NV, vec3 albedo, vec3 F0, float metalness, float alpha)
+{
+    vec3 total = vec3(0.0);
+    for (int i = 0; i < lightCount; i++) {
+        vec3 toLight;
+        float strength = 1.0;
+        float distanceToLight = 1e4;
+        if (lightDirections[i].w < 0.5) {
+            toLight = -lightDirections[i].xyz;
+        } else {
+            vec3 offset = lightPositions[i].xyz - position;
+            distanceToLight = length(offset);
+            if (distanceToLight > lightPositions[i].w) continue;
+            toLight = offset / max(distanceToLight, 0.001);
+            strength = rangeFade(distanceToLight, lightPositions[i].w);
+            if (lightDirections[i].w > 1.5)
+                strength *= smoothstep(lightSpots[i].x, lightSpots[i].y, dot(-toLight, lightDirections[i].xyz));
+        }
+        if (strength <= 0.0 || dot(N, toLight) <= -0.2) continue;
+
+        float lit = lightSpots[i].z > 0.5 ? lightShadow(i, position, N, toLight, distanceToLight) : 1.0;
+        if (lit <= 0.0) continue;
+        total += surfaceLight(toLight, lightColors[i].rgb, lightColors[i].a, strength * lit, N, V, NV, albedo, F0, metalness, alpha, 0.35);
     }
     return total;
 }
@@ -208,66 +282,48 @@ void main()
 
     // Vectors
     vec3 N = detailNormal;
-    vec3 L = directionalLight ? -lightDirection : normalize(lightPos - FragPos);
     vec3 V = normalize(viewPos - FragPos);
-    vec3 R = reflect(-L, N);
+    vec3 L = directionalLight ? -lightDirection : vec3(0.0, 1.0, 0.0);
 
-    // Attenuation
-    float dist = length(lightPos - FragPos);
-    float attenuation = 1.0 / (1.0 + 0.02 * dist + 0.001 * dist * dist);
-    if (directionalLight)
-        attenuation = 1.0;
-
-
-    // Material-aware roughness and specular:
-    // Organic surfaces (horse fur, skin, cloth, wood, stone) are matte without plastic gloss.
-    // Metals (armor, weapons, buckles) retain crisp specular highlights.
+    // The surface: how rough it is and how metallic. A measured roughness is used where the
+    // material has one; otherwise organic surfaces (fur, skin, cloth, wood, stone) are matte and
+    // grey, bright ones (armor, weapons, buckles) are metal.
     float luma = dot(albedo, vec3(0.299, 0.587, 0.114));
     float sat = max(max(albedo.r, albedo.g), albedo.b) - min(min(albedo.r, albedo.g), albedo.b);
     bool isMetallic = (sat < 0.12 && luma > 0.28 && luma < 0.92);
-    float ka = 0.35;
-    float kd = 1.0;
-    float ks = isMetallic ? 0.65 : 0.04;
-    float shininess = isMetallic ? 48.0 : 8.0;
-    if (roughness > 0.0) {
-        // A measured surface: dull when rough, with a tight bright highlight when smooth.
-        ks = mix(0.3, 0.03, roughness);
-        shininess = mix(110.0, 5.0, roughness);
-    }
+    float metalness = isMetallic ? 0.3 : 0.0;   // a guess: grey and mid-bright is iron or stone, and without a map there is no knowing
+    float surfaceRoughness = roughness > 0.0 ? roughness : (isMetallic ? 0.55 : 0.8);
+    float alpha = max(surfaceRoughness * surfaceRoughness, 0.03);
+    vec3 F0 = mix(vec3(0.04), albedo, metalness);
+    float NV = max(dot(N, V), 1e-3);
 
-    // Phong lighting
-    vec3 ambient = ka * albedo * lightColor;
-    if (directionalLight) {
-        // Brighter from the sky above than from the ground below.
-        vec3 sky = ambientColor * 1.12;
-        vec3 ground = ambientColor * vec3(0.62, 0.58, 0.52);
-        ambient = mix(ground, sky, N.y * 0.5 + 0.5) * albedo;
-    }
-    ambient *= ambientOcclusion;
+    // Light from the sky above is brighter than from the ground below.
+    vec3 sky = ambientColor * 1.12;
+    vec3 ground = ambientColor * vec3(0.62, 0.58, 0.52);
+    vec3 ambient = mix(ground, sky, N.y * 0.5 + 0.5) * albedo * ambientOcclusion;
 
-    float diff = max(dot(N, L), 0.0);
-    if (directionalLight)
-        diff = max((dot(N, L) + SUN_WRAP) / (1.0 + SUN_WRAP), 0.0);
-    vec3 diffuse = attenuation * kd * diff * albedo * lightColor;
-    if (!pixelLit)
-        diffuse = VertexDiffuse * kd * albedo;
-
-    float spec = pow(max(dot(R, V), 0.0), shininess);
-    vec3 specular = attenuation * ks * spec * lightColor;
-    if (!pixelLit)
-        specular = VertexSpecular;
-
-    vec3 nearby = pointLightCount == 0 ? vec3(0.0) : (!pixelLit ? VertexPoint : pointLighting(FragPos, N));
-
-    // Shadow
-    //float shadow = ShadowCalculation(FragPosLightSpace, N, L);
+    // Shadow of the sun, from its shadow map
     float shadow = 0.0;
-    if (enableShadows == 1)
+    if (enableShadows == 1 && directionalLight)
         shadow = ShadowCalculation(FragPosLightSpace, N, L);
 
+    // The sun
+    vec3 sun = vec3(0.0);
+    if (directionalLight) {
+        sun = surfaceLight(L, lightColor, 1.0, 1.0, N, V, NV, albedo, F0, metalness, alpha, SUN_WRAP) * (1.0 - shadow);
+    }
 
-    //vec3 color = ambient + (diffuse + specular) * (1.0 - shadow);
-    //FragColor = vec4(color, 1.0);
+    // Everything else that shines
+    vec3 others = vec3(0.0);
+    if (lightCount > 0)
+        others = !pixelLit ? VertexPoint * albedo : pixelLights(FragPos, N, V, NV, albedo, F0, metalness, alpha);
+
+    if (!pixelLit) {
+        // Per-vertex lighting, as the consoles did it: computed at the corners and blended across.
+        vec3 kd = (1.0 - metalness) * albedo;
+        sun = (VertexDiffuse * kd + VertexSpecular) * (1.0 - shadow);
+    }
+
     vec3 color;
 
     vec3 haze = fogColor;
@@ -277,9 +333,7 @@ void main()
     if (material.emissive) {
         color = albedo;
     } else if (enableLighting == 1) {
-        color = ambient + (diffuse + specular) * (1.0 - shadow);
-        if (pointLightCount > 0)
-            color += nearby * albedo;
+        color = ambient + sun + others;
 
         if (waveHeight > 0.0 && directionalLight) {
             // Water mirrors the sky, more so at a glancing angle, and glints where the sun is.

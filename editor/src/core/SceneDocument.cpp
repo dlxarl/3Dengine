@@ -35,6 +35,8 @@ void SceneDocument::createNew() {
     auto light = ObjectFactory::create(ObjectType::Light);
     light->name = "Light";
     light->setPosition(glm::vec3(8.0f, 16.0f, 10.0f));
+    static_cast<LightObject*>(light.get())->type = LightType::Directional;
+    light->setRotation(glm::vec3(-50.0f, 30.0f, 0.0f));
     fresh->add(light);
 
     scene = std::move(fresh);

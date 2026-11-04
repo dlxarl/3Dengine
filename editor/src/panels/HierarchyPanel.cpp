@@ -36,13 +36,13 @@ void drawCreateObjectItems(EditorContext& ctx, ObjectId parent) {
     }
     ImGui::Separator();
 
-    // The renderer lights a scene with one light, so a second would silently do nothing.
-    const bool hasLight = ctx.scene().getLight() != nullptr;
-    if (ImGui::MenuItem("Light", nullptr, false, !hasLight)) ctx.createObject(ObjectType::Light, parent);
-    if (hasLight && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        Widgets::tooltip("This scene already has a light, and the renderer uses one.");
+    if (ImGui::BeginMenu("Light")) {
+        static const char* const NAMES[] = {"Point Light", "Spot Light", "Directional Light"};
+        for (int i = 0; i < 3; i++) {
+            if (ImGui::MenuItem(NAMES[i])) ctx.createLight(i, parent);
+        }
+        ImGui::EndMenu();
     }
-
     if (ImGui::MenuItem("Terrain")) ctx.createObject(ObjectType::Terrain, parent);
     if (ImGui::MenuItem("Camera")) ctx.createObject(ObjectType::Camera, parent);
     if (ImGui::MenuItem("Audio Source")) ctx.createObject(ObjectType::AudioSource, parent);

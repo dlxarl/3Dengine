@@ -237,35 +237,6 @@ void InspectorPanel::drawShape(EditorContext& ctx, Shape& shape) {
 
 }
 
-void InspectorPanel::drawLight(EditorContext& ctx, LightObject& light) {
-    if (Widgets::section("Light")) {
-        if (beginProperties("##light")) {
-            Widgets::propertyLabel("Color");
-            if (ImGui::ColorEdit3("##lightColor", &light.color.x, ImGuiColorEditFlags_Float)) {
-                ctx.document.markDirty();
-            }
-
-            Widgets::propertyLabel("Directional", "Sunlight: the same direction everywhere, along the light's forward axis.");
-            if (ImGui::Checkbox("##directional", &light.directional)) {
-                ctx.document.markDirty();
-            }
-
-            Widgets::propertyLabel("Intensity");
-            if (ImGui::DragFloat("##intensity", &light.intensity, 0.01f, 0.0f, 20.0f, "%.2f")) {
-                ctx.document.markDirty();
-            }
-            ImGui::EndTable();
-        }
-
-        if (ctx.scene().getLight() != &light) {
-            ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Text, Theme::Warning);
-            ImGui::TextWrapped("The renderer uses one light, and this is not it. The first light in the scene is used.");
-            ImGui::PopStyleColor();
-        }
-    }
-}
-
 void InspectorPanel::drawCamera(EditorContext& ctx, CameraObject& camera) {
     if (Widgets::section("Camera")) {
         if (beginProperties("##camera")) {
@@ -595,3 +566,59 @@ void InspectorPanel::drawAsset(EditorContext& ctx, AssetThumbnails& thumbnails) 
         }
     }
 }
+
+void InspectorPanel::drawLight(EditorContext& ctx, LightObject& light) {
+    if (!Widgets::section("Light")) return;
+    bool changed = false;
+
+    if (beginProperties("##light")) {
+        static const char* const TYPES[] = {"Point", "Spot", "Directional"};
+        static const char* const TYPE_TIPS[] = {
+            "Shines every way from its position: a lantern, a candle, a neon sign.",
+            "A cone from its position along its forward axis: a torch, a street lamp, a headlight.",
+            "The same direction everywhere, along the forward axis: the sun or the moon. Its shadows follow the camera."};
+        Widgets::propertyLabel("Type", TYPE_TIPS[(int)light.type]);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##lightType", TYPES[(int)light.type])) {
+            for (int i = 0; i < 3; i++) {
+                if (ImGui::Selectable(TYPES[i], (int)light.type == i)) {
+                    light.type = (LightType)i;
+                    changed = true;
+                }
+                if (ImGui::IsItemHovered()) Widgets::tooltip(TYPE_TIPS[i]);
+            }
+            ImGui::EndCombo();
+        }
+
+        Widgets::propertyLabel("Color");
+        changed |= ImGui::ColorEdit3("##lightColor", &light.color.x, ImGuiColorEditFlags_Float);
+        changed |= slider("Temperature", "##temperature", light.temperature, 0.0f, 12000.0f, light.temperature > 0.0f ? "%.0f K" : "off");
+        if (ImGui::IsItemHovered()) Widgets::tooltip("Tints the color like a glowing body: 2000 K is a candle, 3200 a bulb, 6500 daylight. 0 uses the color as it is.");
+        changed |= slider("Intensity", "##intensity", light.intensity, 0.0f, 20.0f, "%.2f");
+        changed |= slider("Specular", "##specular", light.specular, 0.0f, 4.0f, "%.2f");
+
+        if (light.type != LightType::Directional) {
+            changed |= slider("Range", "##range", light.range, 0.5f, 200.0f, "%.1f m");
+            if (ImGui::IsItemHovered()) Widgets::tooltip("Where the light has faded to nothing. Light is only calculated inside it.");
+        }
+        if (light.type == LightType::Spot) {
+            changed |= slider("Cone angle", "##spotAngle", light.spotAngle, 1.0f, 89.0f, "%.0f deg");
+            changed |= slider("Edge softness", "##spotSoftness", light.spotSoftness, 0.0f, 1.0f, "%.2f");
+        }
+
+        changed |= toggle("Cast shadows", "##castShadows", light.castShadows,
+                          light.type == LightType::Directional ? "Shadows from a shadow map that follows the camera."
+                                                               : "Shadows traced from the light, when ray tracing is on in Render Settings.");
+        if (light.castShadows && light.type != LightType::Directional) {
+            changed |= slider("Source size", "##radius", light.radius, 0.0f, 3.0f, "%.2f m");
+            if (ImGui::IsItemHovered()) Widgets::tooltip("A bigger source makes softer shadows.");
+        }
+
+        changed |= slider("Flicker", "##flicker", light.flicker, 0.0f, 1.0f, "%.2f");
+        if (ImGui::IsItemHovered()) Widgets::tooltip("How much the light wavers or stutters, like a candle or a faulty neon sign.");
+        if (light.flicker > 0.0f) changed |= slider("Flicker speed", "##flickerSpeed", light.flickerSpeed, 0.1f, 40.0f, "%.1f");
+        ImGui::EndTable();
+    }
+    if (changed) ctx.document.markDirty();
+}
+

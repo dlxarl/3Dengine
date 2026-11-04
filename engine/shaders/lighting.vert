@@ -17,7 +17,6 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform mat4 lightSpaceMatrix;
 
-uniform vec3 lightPos;
 uniform vec3 viewPos;
 uniform vec3 lightColor;
 uniform bool directionalLight;
@@ -27,12 +26,13 @@ uniform float time;
 uniform float waveHeight;
 uniform float sway;
 
-// Fires, lanterns and lit windows: position and range, and color.
-const int MAX_POINT_LIGHTS = 8;
-uniform int pointLightCount;
-uniform vec4 pointLights[MAX_POINT_LIGHTS];
-uniform vec3 pointLightColors[MAX_POINT_LIGHTS];
-const float POINT_LIGHT_STRENGTH = 1.8;   // a fire at night outshines the moon
+// The lights besides the sun; see lighting.frag.
+const int MAX_LIGHTS = 16;
+uniform int lightCount;
+uniform vec4 lightPositions[MAX_LIGHTS];
+uniform vec4 lightDirections[MAX_LIGHTS];
+uniform vec4 lightColors[MAX_LIGHTS];
+uniform vec4 lightSpots[MAX_LIGHTS];
 
 // Retro rendering
 uniform bool vertexLighting;
@@ -41,17 +41,30 @@ uniform vec2 vertexGrid; // snapping grid in cells per screen; zero disables it
 // Sunlight reaches a little way round a surface, so the side away from it is not flat black.
 const float SUN_WRAP = 0.15;
 
-vec3 pointLighting(vec3 position, vec3 normal)
+float rangeFade(float distance, float range)
+{
+    float reach = distance / range;
+    float fade = clamp(1.0 - reach * reach, 0.0, 1.0);
+    return fade * fade;
+}
+
+vec3 vertexLights(vec3 position, vec3 normal)
 {
     vec3 total = vec3(0.0);
-    for (int i = 0; i < pointLightCount; i++) {
-        vec3 offset = pointLights[i].xyz - position;
-        float distance = length(offset);
-        float reach = distance / pointLights[i].w;
-        float fade = clamp(1.0 - reach * reach, 0.0, 1.0);
-        float flicker = 0.88 + 0.12 * sin(time * 9.0 + float(i) * 2.3) * sin(time * 5.7 + float(i));
-        float facing = max(dot(normal, offset / max(distance, 0.001)), 0.0) * 0.75 + 0.25;
-        total += pointLightColors[i] * POINT_LIGHT_STRENGTH * fade * fade * facing * flicker;
+    for (int i = 0; i < lightCount; i++) {
+        vec3 toLight;
+        float strength = 1.0;
+        if (lightDirections[i].w < 0.5) {
+            toLight = -lightDirections[i].xyz;
+        } else {
+            vec3 offset = lightPositions[i].xyz - position;
+            float distance = length(offset);
+            toLight = offset / max(distance, 0.001);
+            strength = rangeFade(distance, lightPositions[i].w);
+            if (lightDirections[i].w > 1.5)
+                strength *= smoothstep(lightSpots[i].x, lightSpots[i].y, dot(-toLight, lightDirections[i].xyz));
+        }
+        total += lightColors[i].rgb * strength * (max(dot(normal, toLight), 0.0) * 0.75 + 0.25 * step(0.001, strength));
     }
     return total;
 }
@@ -85,26 +98,18 @@ void main()
     FragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);
 
     VertexPoint = vec3(0.0);
+    VertexDiffuse = vec3(0.0);
+    VertexSpecular = vec3(0.0);
     if (vertexLighting) {
-        vec3 L = normalize(lightPos - FragPos);
         vec3 V = normalize(viewPos - FragPos);
-
-        float dist = length(lightPos - FragPos);
-        float attenuation = 1.0 / (1.0 + 0.02 * dist + 0.001 * dist * dist);
-        float facing = max(dot(Normal, L), 0.0);
         if (directionalLight) {
-            L = -lightDirection;
-            attenuation = 1.0;
-            facing = max((dot(Normal, L) + SUN_WRAP) / (1.0 + SUN_WRAP), 0.0);
+            vec3 L = -lightDirection;
+            float facing = max((dot(Normal, L) + SUN_WRAP) / (1.0 + SUN_WRAP), 0.0);
+            vec3 R = reflect(-L, Normal);
+            VertexDiffuse = facing * lightColor;
+            VertexSpecular = 0.5 * pow(max(dot(R, V), 0.0), 32.0) * lightColor;
         }
-        vec3 R = reflect(-L, Normal);
-
-        VertexDiffuse = attenuation * facing * lightColor;
-        VertexSpecular = attenuation * 0.5 * pow(max(dot(R, V), 0.0), 32.0) * lightColor;
-        VertexPoint = pointLighting(FragPos, Normal);
-    } else {
-        VertexDiffuse = vec3(0.0);
-        VertexSpecular = vec3(0.0);
+        VertexPoint = vertexLights(FragPos, Normal);
     }
 
     vec4 clipPos = projection * view * vec4(FragPos, 1.0);

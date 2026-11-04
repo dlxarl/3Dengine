@@ -86,7 +86,7 @@ void SceneGraph::update(float deltaTime) {
 
 bool SceneGraph::getLightDirection(glm::vec3& direction) const {
     const LightObject* light = getLight();
-    if (!light || !light->directional) return false;
+    if (!light || !light->isDirectional()) return false;
     direction = light->getDirection();
     return true;
 }
@@ -138,6 +138,66 @@ void SceneGraph::drawDepth(Shader& depthShader) {
             shape->draw(depthShader);
         }
     }
+}
+
+int SceneGraph::getLights(glm::vec3 eye, SceneLight* out, int most) const {
+    struct Candidate {
+        float distance;
+        SceneLight light;
+    };
+    std::vector<Candidate> found;
+    const LightObject* sun = getLight();
+
+    for (const auto& object : objects) {
+        if (object->getType() != ObjectType::Light || !object->isVisibleInHierarchy()) continue;
+        const auto* source = static_cast<const LightObject*>(object.get());
+
+        SceneLight light;
+        light.type = source->type == LightType::Directional ? SceneLight::Directional
+                     : source->type == LightType::Spot ? SceneLight::Spot : SceneLight::Point;
+        light.position = source->getWorldPosition();
+        light.direction = source->getDirection();
+        light.color = source->effectiveColor(animationTime);
+        light.range = std::max(source->range, 0.1f);
+        const float outer = glm::radians(std::clamp(source->spotAngle, 1.0f, 89.0f));
+        light.spotCosOuter = std::cos(outer);
+        light.spotCosInner = std::cos(outer * (1.0f - std::clamp(source->spotSoftness, 0.0f, 1.0f)));
+        light.castShadows = source->castShadows;
+        light.radius = std::max(source->radius, 0.0f);
+        light.specular = source->specular;
+
+        // The sun goes first; the rest by how near they are.
+        float distance = source == sun && source->isDirectional() ? -1.0f : 0.0f;
+        if (!source->isDirectional()) {
+            distance = glm::length(light.position - eye) - light.range;
+            if (fogEnd > 0.0f && distance > fogEnd) continue;
+        } else if (source != sun) {
+            distance = 0.0f;
+        }
+        found.push_back({distance, light});
+    }
+
+    // Fires and lit windows shine like point lights, without shadows.
+    glm::vec4 positions[16];
+    glm::vec3 colors[16];
+    const int extra = getPointLights(eye, positions, colors, 16);
+    for (int i = 0; i < extra; i++) {
+        SceneLight light;
+        light.type = SceneLight::Point;
+        light.position = glm::vec3(positions[i]);
+        light.range = positions[i].w;
+        // A fire at night outshines the moon, and wavers a little.
+        const float flicker = 0.88f + 0.12f * std::sin(animationTime * 9.0f + i * 2.3f) * std::sin(animationTime * 5.7f + (float)i);
+        light.color = colors[i] * 1.8f * flicker;
+        light.castShadows = false;
+        found.push_back({glm::length(light.position - eye) - light.range, light});
+    }
+
+    const int count = std::min(most, (int)found.size());
+    std::partial_sort(found.begin(), found.begin() + count, found.end(),
+                      [](const Candidate& a, const Candidate& b) { return a.distance < b.distance; });
+    for (int i = 0; i < count; i++) out[i] = found[i].light;
+    return count;
 }
 
 int SceneGraph::getPointLights(glm::vec3 eye, glm::vec4* positions, glm::vec3* colors, int most) const {
@@ -324,12 +384,15 @@ std::string SceneGraph::makeUniqueName(const std::string& baseName) const {
 }
 
 LightObject* SceneGraph::getLight() const {
+    // The sun, if there is one; otherwise the first light.
+    LightObject* first = nullptr;
     for (const auto& object : objects) {
-        if (object->getType() == ObjectType::Light) {
-            return static_cast<LightObject*>(object.get());
-        }
+        if (object->getType() != ObjectType::Light) continue;
+        auto* light = static_cast<LightObject*>(object.get());
+        if (light->isDirectional()) return light;
+        if (!first) first = light;
     }
-    return nullptr;
+    return first;
 }
 
 CameraObject* SceneGraph::getMainCamera() const {

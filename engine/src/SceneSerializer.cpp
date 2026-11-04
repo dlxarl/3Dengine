@@ -186,8 +186,11 @@ namespace {
             }
             j["shape"] = std::move(s);
         } else if (const auto* light = dynamic_cast<const LightObject*>(&object)) {
-            j["light"] = {{"color", vec3ToJson(light->color)}, {"intensity", light->intensity},
-                          {"directional", light->directional}};
+            static const char* const typeNames[] = {"point", "spot", "directional"};
+            j["light"] = {{"type", typeNames[(int)light->type]}, {"color", vec3ToJson(light->color)}, {"intensity", light->intensity},
+                          {"temperature", light->temperature}, {"range", light->range}, {"spotAngle", light->spotAngle},
+                          {"spotSoftness", light->spotSoftness}, {"castShadows", light->castShadows}, {"radius", light->radius},
+                          {"specular", light->specular}, {"flicker", light->flicker}, {"flickerSpeed", light->flickerSpeed}};
         } else if (const auto* emitter = dynamic_cast<const ParticleEmitter*>(&object)) {
             j["particles"] = particlesToJson(emitter->system.settings);
             j["particles"]["playing"] = emitter->system.playing;
@@ -289,7 +292,19 @@ namespace {
             const json l = j.value("light", json::object());
             light->color = vec3Field(l, "color", light->color);
             light->intensity = l.value("intensity", light->intensity);
-            light->directional = l.value("directional", light->directional);
+            // Scenes from before the types had one light, with a directional flag.
+            const std::string type = l.value("type", std::string(l.value("directional", false) ? "directional" : "point"));
+            light->type = type == "directional" ? LightType::Directional : type == "spot" ? LightType::Spot : LightType::Point;
+            light->temperature = std::max(0.0f, l.value("temperature", light->temperature));
+            // A light from before the types shone as far as the scene went.
+            light->range = std::max(0.1f, l.value("range", l.contains("type") ? light->range : 400.0f));
+            light->spotAngle = std::clamp(l.value("spotAngle", light->spotAngle), 1.0f, 89.0f);
+            light->spotSoftness = std::clamp(l.value("spotSoftness", light->spotSoftness), 0.0f, 1.0f);
+            light->castShadows = l.value("castShadows", light->castShadows);
+            light->radius = std::max(0.0f, l.value("radius", light->radius));
+            light->specular = std::max(0.0f, l.value("specular", light->specular));
+            light->flicker = std::clamp(l.value("flicker", light->flicker), 0.0f, 1.0f);
+            light->flickerSpeed = std::clamp(l.value("flickerSpeed", light->flickerSpeed), 0.1f, 60.0f);
         } else if (auto* emitter = dynamic_cast<ParticleEmitter*>(object.get())) {
             const json p = j.value("particles", json::object());
             particlesFromJson(p, emitter->system.settings);

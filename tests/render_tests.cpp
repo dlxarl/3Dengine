@@ -84,6 +84,8 @@ namespace {
 
         auto light = ObjectFactory::create(ObjectType::Light);
         light->setPosition(glm::vec3(6.0f, 10.0f, 4.0f));
+        static_cast<LightObject*>(light.get())->type = LightType::Directional;
+        light->setWorldMatrix(glm::inverse(glm::lookAt(glm::vec3(6.0f, 10.0f, 4.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))));
         scene.add(light);
     }
 
@@ -1955,7 +1957,7 @@ namespace {
             (void)tower;
             auto sun = ObjectFactory::create(ObjectType::Light);
             auto* sunLight = static_cast<LightObject*>(far.add(sun));
-            sunLight->directional = true;
+            sunLight->type = LightType::Directional;
             sunLight->setWorldMatrix(glm::inverse(glm::lookAt(glm::vec3(0.0f), glm::normalize(glm::vec3(1.0f, -1.0f, 0.4f)), glm::vec3(0, 1, 0))));
 
             CameraView view;
@@ -1998,7 +2000,7 @@ namespace {
             night.add(ground);
             auto moon = ObjectFactory::create(ObjectType::Light);
             auto* moonLight = static_cast<LightObject*>(night.add(moon));
-            moonLight->directional = true;
+            moonLight->type = LightType::Directional;
             moonLight->color = glm::vec3(0.05f);
             moonLight->setWorldMatrix(glm::inverse(glm::lookAt(glm::vec3(0.0f), glm::vec3(0.2f, -1.0f, 0.1f), glm::vec3(0, 0, 1))));
             Shape* fire = addShape(night, ObjectType::Cube, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.2f), glm::vec3(1.0f, 0.6f, 0.3f));
@@ -2219,7 +2221,7 @@ namespace {
         dragon->gameRole = GameRole::Dragon;
         scene.gradientSky = true;
         auto sun = ObjectFactory::create(ObjectType::Light);
-        static_cast<LightObject*>(scene.add(sun))->directional = true;
+        static_cast<LightObject*>(scene.add(sun))->type = LightType::Directional;
 
         const std::string text = SceneSerializer::serialize(scene);
         SceneGraph loaded;
@@ -2230,7 +2232,7 @@ namespace {
         CHECK(loaded.game.quests[1].after == "report");
         CHECK(loaded.game.characters[0].sells.size() == 2);
         CHECK(loaded.game.world.dayMinutes == 12.0f);
-        CHECK(loaded.getLight()->directional);
+        CHECK(loaded.getLight()->isDirectional());
         Shape* restored = loaded.findAs<Shape>(chest->id);
         CHECK(restored && restored->gameParameter == "potion:2, gold:25" && restored->emissive && restored->limbPhase == 180.0f);
         CHECK(restored && restored->limbAxis == 2 && restored->sway == 0.4f && restored->lightRange == 7.5f &&

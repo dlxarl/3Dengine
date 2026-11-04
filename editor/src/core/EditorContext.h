@@ -92,6 +92,8 @@ public:
     // Objects
     SceneObject* createObject(ObjectType type, ObjectId parent = InvalidObjectId);
     // A 2D element by name: Panel, Text, Image, Bar, Button, or the ready-made HUD and Menu.
+    // A light of a type, aimed sensibly: 0 point, 1 spot, 2 directional.
+    SceneObject* createLight(int type, ObjectId parent = InvalidObjectId);
     SceneObject* createUi(const std::string& what, ObjectId parent = InvalidObjectId);
     SceneObject* addModel(const std::string& assetPath, glm::vec3 position);
     void deleteSelected();

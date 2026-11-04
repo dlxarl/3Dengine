@@ -28,6 +28,7 @@ namespace {
         OpenSceneBase = 1000,   // plus the index into the scene list
         CreateBase = 2000,      // plus the ObjectType
         CreateEmpty = 1999,
+        CreateLightBase = 3100, // plus the LightType
         CreateUiBase = 3000,    // plus the index into UI_ITEMS
     };
 
@@ -126,7 +127,7 @@ void MainBars::updateNativeMenu(EditorContext& ctx, PanelVisibility& panels) {
         create.push_back(item(ObjectFactory::typeName(type), CreateBase + (int)type));
     }
     create.push_back(separator());
-    create.push_back(item("Light", CreateBase + (int)ObjectType::Light, "", ctx.scene().getLight() == nullptr));
+    create.push_back(submenu("Light", {item("Point Light", CreateLightBase), item("Spot Light", CreateLightBase + 1), item("Directional Light", CreateLightBase + 2)}));
     create.push_back(item("Terrain", CreateBase + (int)ObjectType::Terrain));
     create.push_back(item("Camera", CreateBase + (int)ObjectType::Camera));
     create.push_back(item("Audio Source", CreateBase + (int)ObjectType::AudioSource));
@@ -191,7 +192,11 @@ void MainBars::updateNativeMenu(EditorContext& ctx, PanelVisibility& panels) {
 }
 
 void MainBars::runCommand(int command, EditorContext& ctx, PanelVisibility& panels) {
-    if (command >= CreateUiBase) {
+    if (command >= CreateLightBase && command < CreateLightBase + 3) {
+        ctx.createLight(command - CreateLightBase);
+        return;
+    }
+    if (command >= CreateUiBase && command < CreateUiBase + 100) {
         const int index = command - CreateUiBase;
         if (index >= 0 && index < 7) ctx.createUi(UI_ITEMS[index], InvalidObjectId);
         return;

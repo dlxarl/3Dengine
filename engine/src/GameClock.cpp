@@ -84,7 +84,7 @@ void GameClock::apply(SceneGraph& scene) {
     const float arc = (day ? hour - 6.0f : std::fmod(hour + 6.0f, 24.0f)) / 12.0f * PI;
     const glm::vec3 toLight = glm::normalize(glm::vec3(std::cos(arc), std::max(std::sin(arc), 0.28f), day ? 0.38f : -0.3f));
 
-    light->directional = true;
+    light->type = LightType::Directional;
     light->color = glm::mix(previous->sun, next->sun, blend);
     light->intensity = 1.0f;
 
