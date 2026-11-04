@@ -12,6 +12,10 @@ struct PanelVisibility {
     bool project = true;
     bool console = true;
     bool renderSettings = true;
+    bool codeEditor = false;
+    bool audioEditor = false;
+    bool terrainEditor = false;
+    bool modelEditor = false;
 };
 
 // The application menu, the toolbar under it and the status bar along the bottom.

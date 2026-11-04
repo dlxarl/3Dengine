@@ -203,7 +203,11 @@ void ProjectPanel::activate(EditorContext& ctx, const Entry& entry) {
                 ctx.setObjectTexture(shape->id, entry.assetPath);
             }
             break;
+        case AssetKind::Audio:
+            ctx.toolRequests.audio = entry.path;
+            break;
         default:
+            if (isTextAsset(entry.path)) ctx.toolRequests.code = entry.path;
             break;
     }
 }
@@ -337,6 +341,15 @@ void ProjectPanel::drawEntryMenu(EditorContext& ctx, const Entry& entry) {
         if (ImGui::MenuItem("Apply to selected object", nullptr, false, shape != nullptr)) {
             ctx.setObjectTexture(shape->id, entry.assetPath);
         }
+    }
+    if (isTextAsset(entry.path) && ImGui::MenuItem("Edit in Code Editor")) {
+        ctx.toolRequests.code = entry.path;
+    }
+    if (entry.kind == AssetKind::Audio && ImGui::MenuItem("Edit in Audio Editor")) {
+        ctx.toolRequests.audio = entry.path;
+    }
+    if (entry.kind == AssetKind::Model && ImGui::MenuItem("Edit in Model Editor")) {
+        ctx.toolRequests.model = entry.path;
     }
     if (entry.kind == AssetKind::Folder && ImGui::MenuItem("Open")) {
         navigateTo = entry.path;

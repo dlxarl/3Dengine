@@ -418,6 +418,24 @@ namespace {
         CHECK(ctx.scene().find(playerId)->position.z == start.z);
     }
 
+    // Source files open in the Code Editor, or in the program the user chose instead.
+    void testCodeEditor(Driver& ui, EditorContext& ctx) {
+        const fs::path file = ctx.project.assetsDir() / "notes.txt";
+        std::ofstream(file) << "one\ntwo\n";
+
+        ctx.toolRequests.code = file;
+        ui.frames(3);
+        CHECK(ctx.toolRequests.code.empty());
+
+        ctx.settings.externalEditor = "cp {file} {file}.opened";
+        ctx.toolRequests.code = file;
+        ui.frames(3);
+        for (int i = 0; i < 50 && !fs::exists(file.string() + ".opened"); i++) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        CHECK(fs::exists(file.string() + ".opened"));
+        ctx.settings.externalEditor.clear();
+        CHECK(isTextAsset("a.cpp") && isTextAsset("B.JSON") && !isTextAsset("a.png"));
+    }
+
     void testGameControls(Driver& ui, EditorContext& ctx) {
         auto holdKey = [&](ImGuiKey key, int frames) {
             ImGui::GetIO().AddKeyEvent(key, true);
@@ -600,6 +618,7 @@ int main() {
         testGameControls(ui, ctx);
         testUnsavedChangesDialog(ui, ctx);
         testScripts(ui, ctx);
+        testCodeEditor(ui, ctx);
     }
 
     return testSummary("ui_tests");

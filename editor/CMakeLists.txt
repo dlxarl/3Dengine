@@ -23,6 +23,7 @@ add_library(editor_core STATIC
         src/project/Project.cpp
         src/project/RecentProjects.cpp
         src/project/ScriptBuilder.cpp
+        src/project/UserSettings.cpp
         src/project/ScriptTemplates.cpp
         src/project/UserPaths.cpp
 )
@@ -59,6 +60,7 @@ set(EDITOR_SOURCES
         src/panels/ConsolePanel.cpp
         src/panels/GameHud.cpp
         src/panels/UiLayer.cpp
+        src/panels/CodeEditorPanel.cpp
         src/panels/HierarchyPanel.cpp
         src/panels/InspectorPanel.cpp
         src/panels/MainBars.cpp

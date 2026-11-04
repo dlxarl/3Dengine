@@ -22,6 +22,7 @@ namespace {
         NewScene = 1, Save, SaveAs, CloseProject, Quit,
         Rename, Duplicate, Delete, FocusSelection,
         PlayStop, Pause, PlayFullscreen,
+        ShowCodeEditor, ShowAudioEditor, ShowTerrainEditor, ShowModelEditor,
         ShowHierarchy, ShowInspector, ShowProject, ShowConsole, ShowRenderSettings, ResetLayout,
         Shortcuts,
         OpenSceneBase = 1000,   // plus the index into the scene list
@@ -163,6 +164,12 @@ void MainBars::updateNativeMenu(EditorContext& ctx, PanelVisibility& panels) {
         item("Pause", Pause, "p", !editing, true, ctx.play.isPaused()),
         item("Play fullscreen", PlayFullscreen, "f", true, true, ctx.fullscreenPreview),
     }));
+    menus.push_back(submenu("Tools", {
+        item("Code Editor", ShowCodeEditor, "", true, false, panels.codeEditor),
+        item("Audio Editor", ShowAudioEditor, "", true, false, panels.audioEditor),
+        item("Terrain Editor", ShowTerrainEditor, "", true, false, panels.terrainEditor),
+        item("Model Editor", ShowModelEditor, "", true, false, panels.modelEditor),
+    }));
     menus.push_back(submenu("Window", {
         item("Hierarchy", ShowHierarchy, "", true, false, panels.hierarchy),
         item("Inspector", ShowInspector, "", true, false, panels.inspector),
@@ -212,6 +219,10 @@ void MainBars::runCommand(int command, EditorContext& ctx, PanelVisibility& pane
         case PlayStop: togglePlay(ctx, false); break;
         case Pause: ctx.play.togglePause(); break;
         case PlayFullscreen: togglePlay(ctx, true); break;
+        case ShowCodeEditor: panels.codeEditor = !panels.codeEditor; break;
+        case ShowAudioEditor: panels.audioEditor = !panels.audioEditor; break;
+        case ShowTerrainEditor: panels.terrainEditor = !panels.terrainEditor; break;
+        case ShowModelEditor: panels.modelEditor = !panels.modelEditor; break;
         case ShowHierarchy: panels.hierarchy = !panels.hierarchy; break;
         case ShowInspector: panels.inspector = !panels.inspector; break;
         case ShowProject: panels.project = !panels.project; break;
@@ -227,7 +238,7 @@ void MainBars::handleShortcuts(EditorContext& ctx) {
     const ImGuiInputFlags global = ImGuiInputFlags_RouteGlobal;
 
     // ImGuiMod_Ctrl is the Command key on macOS.
-    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, global)) ctx.saveScene();
+    if (!ctx.textEditorFocused && ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, global)) ctx.saveScene();
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, global)) ctx.saveSceneAs();
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_N, global)) ctx.newScene();
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D, global)) ctx.duplicateSelected();
@@ -310,6 +321,14 @@ void MainBars::drawMenuBar(EditorContext& ctx, PanelVisibility& panels) {
         if (ImGui::MenuItem(editing ? "Play" : "Stop", "Cmd+P")) togglePlay(ctx, false);
         if (ImGui::MenuItem("Pause", "Shift+Cmd+P", ctx.play.isPaused(), !editing)) ctx.play.togglePause();
         if (ImGui::MenuItem("Play fullscreen", "Shift+Cmd+F", ctx.fullscreenPreview)) togglePlay(ctx, true);
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Tools")) {
+        ImGui::MenuItem("Code Editor", nullptr, &panels.codeEditor);
+        ImGui::MenuItem("Audio Editor", nullptr, &panels.audioEditor);
+        ImGui::MenuItem("Terrain Editor", nullptr, &panels.terrainEditor);
+        ImGui::MenuItem("Model Editor", nullptr, &panels.modelEditor);
         ImGui::EndMenu();
     }
 

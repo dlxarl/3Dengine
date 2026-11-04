@@ -225,6 +225,15 @@ void EditorSession::frame() {
     if (panels.console) consolePanel.draw(ctx, &panels.console);
     viewport.draw(ctx);
 
+    // Files other panels asked the tools to open.
+    if (!ctx.toolRequests.code.empty()) {
+        if (ctx.settings.externalEditor.empty()) panels.codeEditor = true;
+        codeEditor.openFile(ctx, ctx.toolRequests.code, ctx.toolRequests.codeLine);
+        ctx.toolRequests.code.clear();
+        ctx.toolRequests.codeLine = 1;
+    }
+    if (panels.codeEditor) codeEditor.draw(ctx, &panels.codeEditor);
+
     ctx.dialogs.draw();
 
     viewport.render(ctx);

@@ -6,6 +6,7 @@
 #include "Project.h"
 #include "SceneDocument.h"
 #include "ScriptBuilder.h"
+#include "UserSettings.h"
 
 #include <chrono>
 
@@ -35,6 +36,19 @@ public:
     Dialogs dialogs;
 
     ViewMode viewMode = ViewMode::Scene;
+
+    UserSettings settings = UserSettings::load();
+
+    // True while a text editing tool has the keyboard, so that Cmd+S saves its file.
+    bool textEditorFocused = false;
+
+    // Files that other panels want the tools to open; the tools take them on their next frame.
+    struct ToolRequests {
+        std::filesystem::path code;
+        int codeLine = 1;
+        std::filesystem::path audio;
+        std::filesystem::path model;
+    } toolRequests;
 
     // Play mode shown across the whole window, without the editor around it.
     bool fullscreenPreview = false;
