@@ -1266,6 +1266,55 @@ namespace {
         }
     }
 
+    // A point light's shadow comes from rays traced against the still geometry, and only when asked for.
+    void testRayTracedShadows() {
+        SceneGraph scene;
+        scene.ambientColor = glm::vec3(0.05f);
+        Shape* floor = addShape(scene, ObjectType::Plane, glm::vec3(0.0f), glm::vec3(20.0f, 1.0f, 20.0f), glm::vec3(0.8f));
+        floor->isStatic = true;
+        Shape* block = addShape(scene, ObjectType::Cube, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(2.0f), glm::vec3(0.8f));
+        block->isStatic = true;
+        auto* lamp = static_cast<LightObject*>(scene.add(ObjectFactory::create(ObjectType::Light)));
+        lamp->setPosition(glm::vec3(3.0f, 5.0f, 0.0f));
+        lamp->type = LightType::Point;
+        lamp->range = 30.0f;
+        lamp->intensity = 3.0f;
+        lamp->radius = 0.5f;
+
+        CHECK(scene.getRayTraceData() && scene.getRayTraceData()->triangleCount() == 2 + 12);
+
+        Renderer renderer(512);
+        RenderTarget target;
+        target.resize(WIDTH, HEIGHT);
+        auto frame = [&](bool traced) {
+            RenderSettings settings;
+            settings.rayTracedShadows = traced;
+            renderer.render(scene, makeCamera(glm::vec3(-6.0f, 7.0f, 7.0f)), RenderOutput{target.framebuffer(), WIDTH, HEIGHT}, settings);
+            return readImage(target.framebuffer());
+        };
+        const Image open = frame(false);
+        const Image traced = frame(true);
+        CHECK(differingPixels(open, traced) > 800);
+
+        // The shadow is darker, never brighter.
+        double before = 0.0, after = 0.0;
+        for (size_t i = 0; i < open.size(); i += 4) {
+            before += open[i] + open[i + 1] + open[i + 2];
+            after += traced[i] + traced[i + 1] + traced[i + 2];
+        }
+        CHECK(after < before * 0.98);
+
+        // Switching the light's shadows off takes the rays away.
+        lamp->castShadows = false;
+        CHECK(differingPixels(open, frame(true)) < differingPixels(open, traced) / 4);
+
+        // A scene that moves a still object tells the tracer.
+        lamp->castShadows = true;
+        block->setPosition(glm::vec3(0.0f, 1.0f, 40.0f));
+        scene.invalidateRayTracing();
+        CHECK(differingPixels(frame(false), frame(true)) < differingPixels(open, traced) / 4);
+    }
+
     // A terrain is shaped by brushes, found by a ray, painted by tile, saved, and meshed.
     void testTerrain(AssetManager& assets) {
         TerrainObject terrain;
@@ -2418,6 +2467,7 @@ int main() {
         testEffects(assets);
         testDiving(assets);
         testTerrain(assets);
+        testRayTracedShadows();
         testFireDamage(assets);
         testProps(assets);
         testProgress();

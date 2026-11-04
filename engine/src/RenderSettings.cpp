@@ -199,6 +199,9 @@ std::string RenderSettings::toJson() const {
     j["bloom"] = bloom;
     j["lighting"] = lighting;
     j["shadows"] = shadows;
+    j["rayTracedShadows"] = rayTracedShadows;
+    j["rayTracedSun"] = rayTracedSun;
+    j["raySamples"] = raySamples;
     j["motionBlur"] = motionBlur;
     j["post"] = postJson(post);
     return j.dump(4);
@@ -214,6 +217,9 @@ bool RenderSettings::fromJson(const std::string& text, RenderSettings& settings,
         parsed.dithering = j.value("dithering", parsed.dithering);
         parsed.colorBits = std::clamp(j.value("colorBits", parsed.colorBits), 1, 8);
         parsed.vertexPrecision = j.value("vertexPrecision", parsed.vertexPrecision);
+        parsed.rayTracedShadows = j.value("rayTracedShadows", parsed.rayTracedShadows);
+        parsed.rayTracedSun = j.value("rayTracedSun", parsed.rayTracedSun);
+        parsed.raySamples = std::clamp(j.value("raySamples", parsed.raySamples), 1, 8);
         parsed.vignette = std::clamp(j.value("vignette", parsed.vignette), 0.0f, 1.0f);
         parsed.saturation = std::clamp(j.value("saturation", parsed.saturation), 0.0f, 2.0f);
         parsed.scanlines = std::clamp(j.value("scanlines", parsed.scanlines), 0.0f, 1.0f);

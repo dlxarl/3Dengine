@@ -1,5 +1,6 @@
 #pragma once
 #include "Shader.h"
+#include "RayTrace.h"
 #include "Underwater.h"
 #include <glm/glm.hpp>
 
@@ -57,6 +58,10 @@ public:
     // Lights besides the main one, such as fires and lit windows: position and range, and
     // color, nearest to eye first. Fills up to most and returns how many there are.
     virtual int getPointLights(glm::vec3 /*eye*/, glm::vec4* /*positions*/, glm::vec3* /*colors*/, int /*most*/) const { return 0; }
+
+    // The still geometry the renderer may trace shadow rays against, or null for none. The data
+    // is replaced when the geometry changes, so a renderer can tell by the pointer.
+    virtual std::shared_ptr<const RayTraceData> getRayTraceData() { return nullptr; }
 
     // Whether a sky is painted behind everything: the clear color at the horizon, deepening
     // overhead, with clouds, the sun or moon where the light comes from, and stars at night.

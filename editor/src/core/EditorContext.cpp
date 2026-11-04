@@ -317,6 +317,7 @@ void EditorContext::updateUndo() {
     // A drag or a typed value is one step: it counts when the mouse is up and no field is held.
     if (ImGui::IsAnyMouseDown() || ImGui::IsAnyItemActive()) return;
 
+    scene().invalidateRayTracing();   // a change has settled: still geometry may have moved
     undoStack.push_back(std::move(settledSnapshot));
     if (undoStack.size() > 30) undoStack.erase(undoStack.begin());
     redoStack.clear();

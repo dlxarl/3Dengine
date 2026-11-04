@@ -5,6 +5,7 @@
 #include "Log.h"
 #include "Physics.h"
 #include "Player.h"
+#include "RayTrace.h"
 
 #include <algorithm>
 
@@ -140,6 +141,37 @@ void SceneGraph::drawDepth(Shader& depthShader) {
     }
 }
 
+std::shared_ptr<const RayTraceData> SceneGraph::getRayTraceData() {
+    if (!rayTraceDirty && rayTraceData) return rayTraceData;
+    rayTraceDirty = false;
+
+    // Only what stays put casts rays' shadows: the world's buildings, walls and ground.
+    static const glm::vec3 CUBE[8] = {{-0.5f, -0.5f, -0.5f}, {0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, -0.5f}, {-0.5f, 0.5f, -0.5f},
+                                      {-0.5f, -0.5f, 0.5f}, {0.5f, -0.5f, 0.5f}, {0.5f, 0.5f, 0.5f}, {-0.5f, 0.5f, 0.5f}};
+    static const int CUBE_TRIANGLES[12][3] = {{0, 2, 1}, {0, 3, 2}, {4, 5, 6}, {4, 6, 7}, {0, 4, 7}, {0, 7, 3},
+                                              {1, 2, 6}, {1, 6, 5}, {3, 7, 6}, {3, 6, 2}, {0, 1, 5}, {0, 5, 4}};
+    std::vector<glm::vec3> points;
+    for (const auto& shape : shapes) {
+        if (!shape->castShadow || !shape->isStatic || shape->shadowOnly || !shape->isVisibleInHierarchy()) continue;
+        if (shape->gameRole == GameRole::Water) continue;
+        const glm::mat4& world = shape->getWorldMatrix();
+
+        if (const auto* mesh = dynamic_cast<const MeshShape*>(shape.get())) {
+            if (!mesh->getMesh()) continue;
+            for (const glm::vec3& p : mesh->getMesh()->getTriangles()) points.push_back(glm::vec3(world * glm::vec4(p, 1.0f)));
+        } else if (shape->getType() == ObjectType::Cube) {
+            for (const auto& triangle : CUBE_TRIANGLES) {
+                for (int corner : triangle) points.push_back(glm::vec3(world * glm::vec4(CUBE[corner], 1.0f)));
+            }
+        } else if (shape->getType() == ObjectType::Plane) {
+            const glm::vec3 a(-0.5f, 0.0f, -0.5f), b(0.5f, 0.0f, -0.5f), c(0.5f, 0.0f, 0.5f), d(-0.5f, 0.0f, 0.5f);
+            for (const glm::vec3& p : {a, c, b, a, d, c}) points.push_back(glm::vec3(world * glm::vec4(p, 1.0f)));
+        }
+    }
+    rayTraceData = buildRayTraceData(points);
+    return rayTraceData;
+}
+
 int SceneGraph::getLights(glm::vec3 eye, SceneLight* out, int most) const {
     struct Candidate {
         float distance;
@@ -244,6 +276,7 @@ glm::vec3 SceneGraph::getLightColor() const {
 
 SceneObject* SceneGraph::add(std::shared_ptr<SceneObject> object, SceneObject* parent, int childIndex) {
     SceneObject* raw = object.get();
+    rayTraceDirty = true;
 
     if (raw->id == InvalidObjectId || lookup.count(raw->id) != 0) {
         raw->id = nextId++;
@@ -277,6 +310,7 @@ SceneObject* SceneGraph::add(std::shared_ptr<SceneObject> object, SceneObject* p
 void SceneGraph::remove(ObjectId id) {
     SceneObject* target = find(id);
     if (!target) return;
+    rayTraceDirty = true;
 
     std::vector<SceneObject*> doomed{target};
     for (size_t i = 0; i < doomed.size(); i++) {
@@ -313,6 +347,7 @@ void SceneGraph::remove(ObjectId id) {
 }
 
 void SceneGraph::clear() {
+    rayTraceDirty = true;
     colliders.clear();
     roots.clear();
     lookup.clear();

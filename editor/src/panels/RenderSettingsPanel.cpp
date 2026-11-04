@@ -90,6 +90,18 @@ void RenderSettingsPanel::drawRendering(EditorContext& ctx) {
         Widgets::propertyLabel("Shadows");
         ImGui::BeginDisabled(!settings.lighting);
         if (ImGui::Checkbox("##shadows", &settings.shadows)) ctx.graphicsChanged();
+
+        Widgets::propertyLabel("Ray traced shadows", "Shadows of point and spot lights found by tracing rays in the fragment shader against the scene's still (Static) geometry. Lights with Cast shadows on get them, soft when the light has a size.");
+        if (ImGui::Checkbox("##rtShadows", &settings.rayTracedShadows)) ctx.graphicsChanged();
+
+        Widgets::propertyLabel("Ray traced sun", "Also traces the sun's shadows, which then reach as far as the geometry does instead of the shadow map's range. Costs one ray or more per pixel.");
+        if (ImGui::Checkbox("##rtSun", &settings.rayTracedSun)) ctx.graphicsChanged();
+
+        ImGui::BeginDisabled(!settings.rayTracedShadows && !settings.rayTracedSun);
+        Widgets::propertyLabel("Rays per pixel", "For lights with a size: more rays give smoother soft shadows and cost more.");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::SliderInt("##raySamples", &settings.raySamples, 1, 8)) ctx.graphicsChanged();
+        ImGui::EndDisabled();
         ImGui::EndDisabled();
 
         ImGui::EndTable();

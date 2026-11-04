@@ -1,6 +1,7 @@
 #include "Renderer.h"
 #include "Resources.h"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -9,6 +10,9 @@ namespace {
     const unsigned int MATERIAL_TEX_UNITS = 5;
     const float MOTION_BLUR_REFERENCE_FPS = 60.0f;
     const int MAX_LIGHTS = 16;
+    const int RAY_NODE_UNIT = 11;
+    const int RAY_TRIANGLE_UNIT = 12;
+    const int RAY_TEXTURE_WIDTH = 4096;
     const float MIPMAPPED_NEAREST_MAX_LOD = 4.0f;  // further down, the tiles of a texture atlas run together
 
     glm::mat4 lightSpaceFor(glm::vec3 lightPos) {
@@ -62,6 +66,18 @@ Renderer::Renderer(unsigned int shadowResolution) {
     shadowMap = std::make_unique<ShadowMap>(shadowResolution);
     postProcessor = std::make_unique<PostProcessor>(1, 1);
 
+    // Empty until a scene is traced; the shader's samplers always have something behind them.
+    glGenTextures(1, &rayNodeTexture);
+    glGenTextures(1, &rayTriangleTexture);
+    const float emptyTexel[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    for (unsigned int texture : {rayNodeTexture, rayTriangleTexture}) {
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1, 1, 0, GL_RGBA, GL_FLOAT, emptyTexel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+
     glGenSamplers(1, &materialSampler);
     glSamplerParameteri(materialSampler, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glSamplerParameteri(materialSampler, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -77,9 +93,28 @@ Renderer::Renderer(unsigned int shadowResolution) {
 }
 
 Renderer::~Renderer() {
+    glDeleteTextures(1, &rayNodeTexture);
+    glDeleteTextures(1, &rayTriangleTexture);
     glDeleteSamplers(1, &materialSampler);
     glDeleteTextures(1, &fallbackTexture);
     glDeleteVertexArrays(1, &skyVertexArray);
+}
+
+void Renderer::uploadRayTrace(const std::shared_ptr<const RayTraceData>& data) {
+    rayUploaded = data;
+
+    auto upload = [](unsigned int texture, const std::vector<glm::vec4>& texels) {
+        const int count = std::max<int>(1, (int)texels.size());
+        const int rows = (count + RAY_TEXTURE_WIDTH - 1) / RAY_TEXTURE_WIDTH;
+        std::vector<glm::vec4> padded(texels);
+        padded.resize((size_t)rows * RAY_TEXTURE_WIDTH, glm::vec4(0.0f));
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, RAY_TEXTURE_WIDTH, rows, 0, GL_RGBA, GL_FLOAT, padded.data());
+    };
+    upload(rayNodeTexture, data->nodes);
+    upload(rayTriangleTexture, data->triangles);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Renderer::applyTextureFilter(TextureFilter filter) {
@@ -182,6 +217,23 @@ void Renderer::render(Scene& scene, const CameraView& camera, const RenderOutput
         lightingShader->setVec4("lightColors" + at, glm::vec4(light.color, light.specular));
         lightingShader->setVec4("lightSpots" + at, glm::vec4(light.spotCosOuter, light.spotCosInner, light.castShadows ? 1.0f : 0.0f, light.radius));
     }
+
+    // Shadow rays, against the scene's still geometry.
+    std::shared_ptr<const RayTraceData> rays;
+    if (settings.lighting && (settings.rayTracedShadows || settings.rayTracedSun)) rays = scene.getRayTraceData();
+    if (rays && rays != rayUploaded) uploadRayTrace(rays);
+    const bool tracing = rays && !rays->empty();
+    lightingShader->setInt("rtShadows", tracing && settings.rayTracedShadows ? 1 : 0);
+    lightingShader->setInt("rtSun", tracing && settings.rayTracedSun ? 1 : 0);
+    lightingShader->setInt("rtSamples", std::clamp(settings.raySamples, 1, 8));
+    const float sunDegrees = (lightTotal > 0 && lights[0].type == SceneLight::Directional) ? lights[0].radius : 0.0f;
+    lightingShader->setFloat("sunSoftness", std::tan(glm::radians(std::min(sunDegrees, 20.0f))));
+    glActiveTexture(GL_TEXTURE0 + RAY_NODE_UNIT);
+    glBindTexture(GL_TEXTURE_2D, rayNodeTexture);
+    glActiveTexture(GL_TEXTURE0 + RAY_TRIANGLE_UNIT);
+    glBindTexture(GL_TEXTURE_2D, rayTriangleTexture);
+    lightingShader->setInt("rtNodes", RAY_NODE_UNIT);
+    lightingShader->setInt("rtTriangles", RAY_TRIANGLE_UNIT);
 
     const glm::vec2 fog = scene.getFogRange();
     lightingShader->setVec2("fogRange", fog);

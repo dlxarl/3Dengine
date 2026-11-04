@@ -43,6 +43,14 @@ uniform vec4 lightDirections[MAX_LIGHTS];   // xyz the way the light travels; w 
 uniform vec4 lightColors[MAX_LIGHTS];       // rgb color with intensity; a how bright its highlights are
 uniform vec4 lightSpots[MAX_LIGHTS];        // x cosine of the cone's edge, y of its bright core; z casts shadows; w radius
 
+// Shadow rays: the scene's still geometry as a bounding volume hierarchy in two float textures.
+uniform sampler2D rtNodes;
+uniform sampler2D rtTriangles;
+uniform int rtShadows;       // trace the lights that have shadows on
+uniform int rtSun;           // trace the sun too
+uniform int rtSamples;
+uniform float sunSoftness;   // the tangent of the sun's angular radius
+
 uniform int enableLighting;
 uniform int enableShadows;
 
@@ -134,6 +142,82 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
     return 1.0 - shadow;
 }
 
+// ---- Ray tracing -------------------------------------------------------------------------
+
+vec4 rtFetch(sampler2D data, int index)
+{
+    return texelFetch(data, ivec2(index & 4095, index >> 12), 0);
+}
+
+// Whether anything lies between origin and maxDistance along direction: a walk down the
+// hierarchy of boxes, testing the triangles of the leaves it reaches.
+bool rtOccluded(vec3 origin, vec3 direction, float maxDistance)
+{
+    vec3 safe = vec3(abs(direction.x) < 1e-8 ? 1e-8 : direction.x,
+                     abs(direction.y) < 1e-8 ? 1e-8 : direction.y,
+                     abs(direction.z) < 1e-8 ? 1e-8 : direction.z);
+    vec3 inverse = 1.0 / safe;
+
+    int stack[48];
+    int top = 0;
+    int node = 0;
+    for (int guard = 0; guard < 4096; guard++) {
+        vec4 a = rtFetch(rtNodes, node * 2);
+        vec4 b = rtFetch(rtNodes, node * 2 + 1);
+        vec3 t0 = (a.xyz - origin) * inverse;
+        vec3 t1 = (b.xyz - origin) * inverse;
+        vec3 nearT = min(t0, t1);
+        vec3 farT = max(t0, t1);
+        float enter = max(max(nearT.x, nearT.y), nearT.z);
+        float leave = min(min(farT.x, farT.y), farT.z);
+        if (leave >= max(enter, 0.0) && enter < maxDistance) {
+            if (b.w > 0.5) {
+                int first = int(a.w);
+                int count = int(b.w);
+                for (int i = 0; i < count; i++) {
+                    int base = (first + i) * 3;
+                    vec3 corner = rtFetch(rtTriangles, base).xyz;
+                    vec3 e1 = rtFetch(rtTriangles, base + 1).xyz;
+                    vec3 e2 = rtFetch(rtTriangles, base + 2).xyz;
+                    vec3 p = cross(direction, e2);
+                    float det = dot(e1, p);
+                    if (abs(det) < 1e-9) continue;
+                    float invDet = 1.0 / det;
+                    vec3 s = origin - corner;
+                    float u = dot(s, p) * invDet;
+                    if (u < 0.0 || u > 1.0) continue;
+                    vec3 q = cross(s, e1);
+                    float v = dot(direction, q) * invDet;
+                    if (v < 0.0 || u + v > 1.0) continue;
+                    float t = dot(e2, q) * invDet;
+                    if (t > 1e-4 && t < maxDistance) return true;
+                }
+            } else {
+                if (top < 48) stack[top++] = int(a.w);
+                node += 1;
+                continue;
+            }
+        }
+        if (top == 0) break;
+        node = stack[--top];
+    }
+    return false;
+}
+
+// Interleaved gradient noise: a different value at every pixel, so that few rays still average out.
+float rtNoise(float offset)
+{
+    return fract(52.9829189 * fract(dot(gl_FragCoord.xy + offset * vec2(17.0, 31.0), vec2(0.06711056, 0.00583715))));
+}
+
+vec3 rtDirectionInSphere(int sample)
+{
+    float a = rtNoise(float(sample)) * 6.2831853;
+    float b = rtNoise(float(sample) + 7.0) * 2.0 - 1.0;
+    float r = sqrt(max(1.0 - b * b, 0.0));
+    return vec3(r * cos(a), b, r * sin(a)) * pow(rtNoise(float(sample) + 3.0), 0.333);
+}
+
 // How much of a point or spot light reaches a distance, smoothly gone at its range.
 float rangeFade(float distance, float range)
 {
@@ -191,7 +275,41 @@ vec3 surfaceLight(vec3 toLight, vec3 radiance, float specular, float intensitySc
 // How much of the light gets through to a point: 1 in the open, 0 in shadow.
 float lightShadow(int index, vec3 position, vec3 normal, vec3 toLight, float distanceToLight)
 {
-    return 1.0;
+    if (rtShadows == 0) return 1.0;
+
+    float radius = lightSpots[index].w;
+    int samples = radius > 0.0 ? rtSamples : 1;
+    vec3 origin = position + normal * 0.04 + toLight * 0.02;
+    float visible = 0.0;
+    for (int s = 0; s < 8; s++) {
+        if (s >= samples) break;
+        vec3 target = lightPositions[index].xyz;
+        if (lightDirections[index].w < 0.5) {
+            // A directional light with a size: the direction wobbles inside a cone.
+            vec3 direction = normalize(-lightDirections[index].xyz + rtDirectionInSphere(s) * radius * 0.05);
+            visible += rtOccluded(origin, direction, 400.0) ? 0.0 : 1.0;
+            continue;
+        }
+        if (radius > 0.0) target += rtDirectionInSphere(s) * radius;
+        vec3 offset = target - origin;
+        float span = max(length(offset), 0.001);
+        visible += rtOccluded(origin, offset / span, span - 0.05) ? 0.0 : 1.0;
+    }
+    return visible / float(samples);
+}
+
+// The sun's shadow from rays, reaching as far as the geometry goes.
+float sunRayShadow(vec3 position, vec3 normal, vec3 toSun)
+{
+    int samples = sunSoftness > 0.0 ? rtSamples : 1;
+    vec3 origin = position + normal * 0.05 + toSun * 0.03;
+    float visible = 0.0;
+    for (int s = 0; s < 8; s++) {
+        if (s >= samples) break;
+        vec3 direction = normalize(toSun + rtDirectionInSphere(s) * sunSoftness);
+        visible += rtOccluded(origin, direction, 600.0) ? 0.0 : 1.0;
+    }
+    return 1.0 - visible / float(samples);
 }
 
 vec3 pixelLights(vec3 position, vec3 N, vec3 V, float NV, vec3 albedo, vec3 F0, float metalness, float alpha)
@@ -306,6 +424,8 @@ void main()
     float shadow = 0.0;
     if (enableShadows == 1 && directionalLight)
         shadow = ShadowCalculation(FragPosLightSpace, N, L);
+    if (rtSun == 1 && directionalLight && dot(N, L) > -0.1)
+        shadow = max(shadow, sunRayShadow(FragPos, N, L));
 
     // The sun
     vec3 sun = vec3(0.0);
