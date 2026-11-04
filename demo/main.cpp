@@ -8,7 +8,7 @@
 int main(int argc, char** argv) {
     Engine engine;
 
-    if (engine.init(1920, 1080, "3D Engine") != 0) {
+    if (engine.init(1920, 1080, "Aureon Engine") != 0) {
         std::cout << "Failed to initialize engine" << std::endl;
         return -1;
     }

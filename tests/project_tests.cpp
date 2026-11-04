@@ -1,4 +1,6 @@
 #include "AssetImporter.h"
+#include "AudioEdit.h"
+#include "EditMesh.h"
 #include "AssetManager.h"
 #include "ObjLoader.h"
 #include "Project.h"
@@ -326,6 +328,151 @@ namespace {
     }
 }
 
+void testEditMesh() {
+    EditMesh cube = EditMesh::cube(2.0f);
+    CHECK(cube.valid() && cube.positions.size() == 8 && cube.faces.size() == 6);
+    CHECK(cube.toMeshData().vertexCount() == 36);
+
+    // Every normal points out of the cube: the faces wind counter-clockwise seen from outside.
+    for (int f = 0; f < 6; f++) CHECK(glm::dot(cube.faceNormal(f), cube.faceCenter(f) - cube.center()) > 0.5f);
+    for (const EditMesh& mesh : {EditMesh::plane(4.0f, 3), EditMesh::cylinder(12), EditMesh::cone(12), EditMesh::sphere(12, 6)}) {
+        CHECK(mesh.valid() && !mesh.faces.empty());
+        CHECK(mesh.toMeshData().vertexCount() > 0);
+    }
+    EditMesh plane = EditMesh::plane(4.0f, 3);
+    CHECK(plane.faces.size() == 9 && glm::dot(plane.faceNormal(0), glm::vec3(0, 1, 0)) > 0.99f);
+    EditMesh cylinder = EditMesh::cylinder(12);
+    for (int f = 0; f < (int)cylinder.faces.size(); f++) CHECK(glm::dot(cylinder.faceNormal(f), cylinder.faceCenter(f) - cylinder.center()) > 0.0f);
+    EditMesh sphere = EditMesh::sphere(12, 6);
+    for (int f = 0; f < (int)sphere.faces.size(); f++) CHECK(glm::dot(sphere.faceNormal(f), sphere.faceCenter(f)) > 0.0f);
+    EditMesh cone = EditMesh::cone(12);
+    for (int f = 0; f < (int)cone.faces.size(); f++) CHECK(glm::dot(cone.faceNormal(f), cone.faceCenter(f) - cone.center()) > 0.0f);
+
+    // A ray from above meets the top of the cube first.
+    float distance = 0.0f;
+    const int top = cube.pick(glm::vec3(0.1f, 10.0f, 0.2f), glm::vec3(0, -1, 0), distance);
+    CHECK(top >= 0 && std::abs(distance - 9.0f) < 0.001f && cube.faceNormal(top).y > 0.99f);
+    CHECK(cube.pick(glm::vec3(5.0f, 10.0f, 0.0f), glm::vec3(0, -1, 0), distance) == -1);
+
+    // Extruding the top adds a wall for each of its edges, and the walls face outwards.
+    EditMesh extruded = cube;
+    const std::set<int> topFace{top};
+    extruded.extrude(topFace, 1.0f);
+    CHECK(extruded.valid() && extruded.faces.size() == 10 && extruded.positions.size() == 12);
+    CHECK(std::abs(extruded.faceCenter(top).y - 2.0f) < 0.001f);
+    for (int wall = 6; wall < 10; wall++) {
+        const glm::vec3 sideways = extruded.faceCenter(wall) - extruded.faceCenter(top);
+        CHECK(glm::dot(extruded.faceNormal(wall), glm::vec3(sideways.x, 0.0f, sideways.z)) > 0.1f);
+    }
+
+    // Faces are cut into pieces that still cover the same area.
+    EditMesh cut = cube;
+    const std::set<int> created = cut.subdivide(topFace);
+    CHECK(cut.valid() && cut.faces.size() == 9 && created.size() == 4);
+    CHECK(cut.positions.size() > cube.positions.size());
+
+    EditMesh smaller = cube;
+    smaller.deleteFaces(topFace);
+    CHECK(smaller.valid() && smaller.faces.size() == 5 && smaller.positions.size() == 8);
+
+    EditMesh flipped = cube;
+    flipped.flip({0});
+    CHECK(glm::dot(flipped.faceNormal(0), cube.faceNormal(0)) < -0.99f);
+
+    EditMesh moved = cube;
+    moved.translate(moved.verticesOf({top}), glm::vec3(0, 3, 0));
+    CHECK(std::abs(moved.faceCenter(top).y - 4.0f) < 0.001f);
+    CHECK(moved.facesUsing(moved.verticesOf({top})).count(top) == 1);
+
+    // Triangles from a model join back into shared vertices, and a saved model reads back.
+    EditMesh joined = EditMesh::fromMeshData(cube.toMeshData());
+    CHECK(joined.faces.size() == 12 && joined.positions.size() == 8);
+
+    TempDir temp;
+    const fs::path file = temp.path / "cube.obj";
+    std::string error;
+    CHECK(cube.saveObj(file, &error));
+    EditMesh loaded;
+    CHECK(EditMesh::loadObj(file, loaded, &error) && loaded.valid());
+    CHECK(loaded.toMeshData().vertexCount() == 36 && loaded.positions.size() == 8);
+
+    EditMesh smooth = EditMesh::sphere(8, 4);
+    smooth.smooth = true;
+    const MeshData smoothed = smooth.toMeshData();
+    CHECK(smoothed.vertexCount() > 0);
+    CHECK(smooth.saveObj(temp.path / "sphere.obj", &error));
+
+    EditMesh doubled = cube;
+    doubled.positions.push_back(doubled.positions[0] + glm::vec3(0.0001f));
+    doubled.faces[0].corners[0] = 8;
+    CHECK(doubled.mergeByDistance(0.01f) == 1 && doubled.valid() && doubled.positions.size() == 8);
+
+    cube.boxProjectUVs(2.0f);
+    CHECK(cube.valid());
+}
+
+void testAudioEdit() {
+    AudioClip clip;
+    clip.channels = 2;
+    clip.sampleRate = 1000;
+    for (int i = 0; i < 100; i++) {
+        clip.samples.push_back((int16_t)(i * 100));
+        clip.samples.push_back((int16_t)(-i * 100));
+    }
+    CHECK(clip.frames() == 100);
+
+    // Ranges outside the clip are brought inside it.
+    const AudioEdit::Range outside = AudioEdit::clamp(clip, {90, 500});
+    CHECK(outside.begin == 90 && outside.end == 100);
+
+    AudioClip trimmed = clip;
+    AudioEdit::trim(trimmed, {10, 30});
+    CHECK(trimmed.frames() == 20 && trimmed.samples[0] == 1000 && trimmed.samples[1] == -1000);
+
+    AudioClip cut = clip;
+    AudioEdit::cut(cut, {10, 30});
+    CHECK(cut.frames() == 80 && cut.samples[20] == 3000);
+
+    AudioClip reversed = clip;
+    AudioEdit::reverse(reversed, {0, 100});
+    CHECK(reversed.samples[0] == 9900 && reversed.samples[198] == 0 && reversed.samples[199] == 0);
+
+    AudioClip faded = clip;
+    AudioEdit::fadeIn(faded, {0, 100});
+    CHECK(faded.samples[0] == 0 && faded.samples[198] == 9900);
+    CHECK(faded.samples[100] < clip.samples[100] && faded.samples[100] > 0);
+
+    // Normalizing brings the loudest sample to the level, and gain in decibels is a factor.
+    AudioClip loud = clip;
+    AudioEdit::normalize(loud, {0, 100}, 0.5f);
+    CHECK(std::abs(AudioEdit::peak(loud, {0, 100}) - 0.5f) < 0.01f);
+    AudioClip doubled = clip;
+    AudioEdit::gain(doubled, {0, 100}, 6.0206f);
+    CHECK(std::abs(doubled.samples[2] - 2 * clip.samples[2]) <= 1);
+    AudioClip clipped = clip;
+    AudioEdit::gain(clipped, {0, 100}, 40.0f);
+    CHECK(clipped.samples[198] == 32767 && clipped.samples[199] == -32768);
+
+    AudioClip faster = clip;
+    AudioEdit::resample(faster, 2.0f);
+    CHECK(faster.frames() >= 49 && faster.frames() <= 51);
+
+    AudioClip mono = clip;
+    AudioEdit::toMono(mono);
+    CHECK(mono.channels == 1 && mono.frames() == 100 && mono.samples[50] == 0);
+
+    // A saved file reads back as what was written.
+    TempDir temp;
+    const std::string file = (temp.path / "edit.wav").string();
+    std::string error;
+    CHECK(saveWav(clip, file, &error));
+    std::shared_ptr<AudioClip> loaded = loadWav(file, &error);
+    CHECK(loaded && loaded->channels == 2 && loaded->sampleRate == 1000 && loaded->samples == clip.samples);
+
+    AudioClip silent;
+    CHECK(!saveWav(silent, file, &error));
+}
+
 int main() {
     testNameValidation();
     testCreateProducesExpectedLayout();
@@ -339,5 +486,7 @@ int main() {
     testImport();
     testObjLoader();
     testUserPaths();
+    testAudioEdit();
+    testEditMesh();
     return testSummary("project_tests");
 }

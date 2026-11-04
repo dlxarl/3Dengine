@@ -70,6 +70,9 @@ public:
 
     // Project-relative asset path of the scene to open first; may be empty.
     std::string startupScene;
+
+    // Project-relative asset path of the font the game UI uses; empty is the bundled Inter.
+    std::string uiFont;
     RenderSettings graphics;
 
     bool saveSettings(std::string* error = nullptr) const;

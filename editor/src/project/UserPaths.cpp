@@ -1,6 +1,7 @@
 #include "UserPaths.h"
 
 #include <cstdlib>
+#include <system_error>
 
 namespace fs = std::filesystem;
 
@@ -18,13 +19,18 @@ fs::path UserPaths::configDir() {
         return fs::u8path(overrideDir);
     }
 #if defined(__APPLE__)
-    return home() / "Library" / "Application Support" / "3D Engine";
+    // The folder was called "3D Engine" before the rename; the recent projects list moves with it.
+    const fs::path current = home() / "Library" / "Application Support" / "Aureon";
+    const fs::path previous = home() / "Library" / "Application Support" / "3D Engine";
+    std::error_code ec;
+    if (fs::exists(previous, ec) && !fs::exists(current, ec)) fs::rename(previous, current, ec);
+    return current;
 #elif defined(_WIN32)
-    if (const char* appData = std::getenv("APPDATA")) return fs::u8path(appData) / "3D Engine";
-    return home() / "3D Engine";
+    if (const char* appData = std::getenv("APPDATA")) return fs::u8path(appData) / "Aureon";
+    return home() / "Aureon";
 #else
-    if (const char* xdg = std::getenv("XDG_CONFIG_HOME")) return fs::u8path(xdg) / "3d-engine";
-    return home() / ".config" / "3d-engine";
+    if (const char* xdg = std::getenv("XDG_CONFIG_HOME")) return fs::u8path(xdg) / "aureon";
+    return home() / ".config" / "aureon";
 #endif
 }
 

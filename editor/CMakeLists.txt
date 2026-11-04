@@ -22,6 +22,11 @@ add_library(editor_core STATIC
         src/project/AssetImporter.cpp
         src/project/Project.cpp
         src/project/RecentProjects.cpp
+        src/project/AudioEdit.cpp
+        src/project/EditMesh.cpp
+        src/project/ScriptBuilder.cpp
+        src/project/UserSettings.cpp
+        src/project/ScriptTemplates.cpp
         src/project/UserPaths.cpp
 )
 target_include_directories(editor_core PUBLIC
@@ -29,6 +34,9 @@ target_include_directories(editor_core PUBLIC
         ${stb_SOURCE_DIR}
 )
 target_compile_definitions(editor_core PRIVATE ENGINE_VERSION="${PROJECT_VERSION}")
+# Where the headers are that project scripts are compiled against.
+target_compile_definitions(editor_core PRIVATE
+        ENGINE_SCRIPT_INCLUDES="${CMAKE_SOURCE_DIR}/engine/include|${glm_SOURCE_DIR}|${glfw_SOURCE_DIR}/include")
 target_link_libraries(editor_core
         PUBLIC engine
         PRIVATE nlohmann_json::nlohmann_json
@@ -52,6 +60,12 @@ set(EDITOR_SOURCES
 
         src/panels/AssetThumbnails.cpp
         src/panels/ConsolePanel.cpp
+        src/panels/GameHud.cpp
+        src/panels/UiLayer.cpp
+        src/panels/CodeEditorPanel.cpp
+        src/panels/AudioEditorPanel.cpp
+        src/panels/TerrainEditorPanel.cpp
+        src/panels/ModelEditorPanel.cpp
         src/panels/HierarchyPanel.cpp
         src/panels/InspectorPanel.cpp
         src/panels/MainBars.cpp
@@ -92,8 +106,8 @@ target_link_libraries(Editor PRIVATE editor_ui)
 if (APPLE)
     set_target_properties(Editor PROPERTIES
             MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
-            MACOSX_BUNDLE_GUI_IDENTIFIER com.github.dlxarl.3dengine.editor
-            MACOSX_BUNDLE_BUNDLE_NAME "3D Engine Editor"
+            MACOSX_BUNDLE_GUI_IDENTIFIER com.github.dlxarl.aureon.editor
+            MACOSX_BUNDLE_BUNDLE_NAME "Aureon Editor"
             MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
             MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
     )
@@ -104,4 +118,5 @@ engine_add_resources(Editor
         FONTS
             "${imgui_SOURCE_DIR}/misc/fonts/Roboto-Medium.ttf"
             "${imgui_SOURCE_DIR}/misc/fonts/Cousine-Regular.ttf"
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/Inter.ttf"
 )

@@ -110,7 +110,7 @@ std::optional<fs::path> LauncherApp::run() {
     GlWindow::Config config;
     config.width = 1080;
     config.height = 680;
-    config.title = "3D Engine";
+    config.title = "Aureon Editor";
     GlWindow window(config);
     if (!window.isValid()) return std::nullopt;
 
@@ -181,7 +181,7 @@ void LauncherApp::drawSidebar(float width, float height) {
     drawBrandMark(draw, ImVec2(origin.x + 20.0f, origin.y + 22.0f), 24.0f);
     ImGui::SetCursorScreenPos(ImVec2(origin.x + 54.0f, origin.y + 22.0f));
     ImGui::PushFont(nullptr, 17.0f);
-    ImGui::TextUnformatted("3D Engine");
+    ImGui::TextUnformatted("Aureon Editor");
     ImGui::PopFont();
 
     ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + 70.0f));

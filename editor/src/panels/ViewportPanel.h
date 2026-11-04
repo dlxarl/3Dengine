@@ -1,6 +1,8 @@
 #pragma once
 #include "EditorCamera.h"
 #include "EditorContext.h"
+#include "GameHud.h"
+#include "UiLayer.h"
 #include "ViewportRenderer.h"
 
 #include "imgui.h"
@@ -12,13 +14,16 @@
 // itself is ViewportRenderer's job.
 class ViewportPanel {
 public:
-    void draw(EditorContext& ctx);
+    // Fullscreen covers the whole window with the game and nothing else.
+    void draw(EditorContext& ctx, bool fullscreen = false);
 
     // Runs after the panels, so the image shown this frame includes this frame's edits.
     void render(EditorContext& ctx);
 
 private:
     ViewportRenderer renderer;
+    GameHud hud;
+    UiLayer ui;
     EditorCamera camera;
 
     ImGuizmo::OPERATION operation = ImGuizmo::TRANSLATE;
@@ -38,12 +43,12 @@ private:
     void drawToolStrip(EditorContext& ctx);
     void drawSceneView(EditorContext& ctx);
     void drawGameView(EditorContext& ctx);
-    void drawGameHud(EditorContext& ctx);
     void drawImage();
     void drawGizmo(EditorContext& ctx);
     void drawObjectMarkers(EditorContext& ctx);
     void drawCameraFrustum(const CameraObject& camera, ImDrawList* draw);
     void handleShortcuts(EditorContext& ctx);
+    bool handleTerrainBrush(EditorContext& ctx, TerrainObject& terrain, bool hovered);
     void handleClick(EditorContext& ctx);
     void handleDrops(EditorContext& ctx);
     void focusSelection(EditorContext& ctx);

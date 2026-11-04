@@ -23,6 +23,7 @@ namespace Icons {
     void object(ImDrawList* draw, ImVec2 pos, float size, ObjectType type, ImU32 color);
     void asset(ImDrawList* draw, ImVec2 pos, float size, AssetKind kind);
     void light(ImDrawList* draw, ImVec2 center, float radius, ImU32 color);
+    void speaker(ImDrawList* draw, ImVec2 center, float size, ImU32 color);
     void camera(ImDrawList* draw, ImVec2 center, float size, ImU32 color);
     void warning(ImDrawList* draw, ImVec2 pos, float size, ImU32 color);
     void error(ImDrawList* draw, ImVec2 pos, float size, ImU32 color);

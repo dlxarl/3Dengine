@@ -1,5 +1,7 @@
 #include "SceneGraph.h"
 #include "AssetManager.h"
+#include "EffectRenderer.h"
+#include "Frustum.h"
 #include "Log.h"
 #include "Physics.h"
 #include "Player.h"
@@ -30,15 +32,81 @@ CameraView CameraObject::makeView(float aspectRatio) const {
 
 SceneGraph::SceneGraph() = default;
 
+void SceneGraph::animate(float deltaTime) {
+    animationTime += deltaTime;
+    for (const auto& emitter : emitters) {
+        if (emitter->isVisibleInHierarchy()) emitter->update(deltaTime);
+    }
+    for (const auto& fire : fires) {
+        if (fire->isVisibleInHierarchy()) fire->update(deltaTime);
+    }
+}
+
+void SceneGraph::drawEffects(EffectRenderer& renderer) {
+    for (const auto& water : waters) {
+        if (water->isVisibleInHierarchy()) renderer.drawWater(*water);
+    }
+    for (const auto& shape : shapes) {
+        if (shape->gameRole != GameRole::Water || !shape->isVisibleInHierarchy()) continue;
+        if (const auto* mesh = dynamic_cast<const MeshShape*>(shape.get())) renderer.drawWaterMesh(*mesh);
+    }
+    for (const auto& emitter : emitters) {
+        if (emitter->isVisibleInHierarchy()) renderer.drawParticles(emitter->system);
+    }
+    for (const auto& fire : fires) {
+        if (!fire->isVisibleInHierarchy()) continue;
+        renderer.drawParticles(fire->smokeCloud);
+        renderer.drawParticles(fire->flames);
+        renderer.drawParticles(fire->sparkShower);
+    }
+}
+
+UnderwaterView SceneGraph::getUnderwater(glm::vec3 eye) const {
+    UnderwaterView view;
+    for (const auto& water : waters) {
+        if (!water->isVisibleInHierarchy() || !water->contains(glm::vec2(eye.x, eye.z)) || eye.y >= water->getLevel()) continue;
+        view.active = true;
+        view.depth = water->getLevel() - eye.y;
+        view.tint = water->deepColor * 0.5f + water->shallowColor * 0.8f;
+        return view;
+    }
+    for (const WaterArea& area : waterAreas) {
+        if (eye.y >= area.level || eye.x < area.area.x || eye.x > area.area.z || eye.z < area.area.y || eye.z > area.area.w) continue;
+        view.active = true;
+        view.depth = area.level - eye.y;
+        return view;
+    }
+    return view;
+}
+
 void SceneGraph::update(float deltaTime) {
-    Physics::step(shapes, deltaTime);
+    animate(deltaTime);
+    Physics::simulate(shapes, deltaTime, ground.isValid() ? &ground : nullptr, &colliders);
+}
+
+bool SceneGraph::getLightDirection(glm::vec3& direction) const {
+    const LightObject* light = getLight();
+    if (!light || !light->directional) return false;
+    direction = light->getDirection();
+    return true;
 }
 
 void SceneGraph::draw(Shader& lightingShader, Shader& /*lampShader*/, const glm::mat4& view, const glm::mat4& proj) {
+    const Frustum frustum(proj * view);
+    const glm::vec3 eye = glm::vec3(glm::inverse(view)[3]);
+
     for (const auto& shape : shapes) {
-        if (shape->isVisibleInHierarchy() && !shape->shadowOnly) {
-            shape->draw(lightingShader);
-        }
+        if (!shape->isVisibleInHierarchy() || shape->shadowOnly) continue;
+        if (shape->gameRole == GameRole::Water && dynamic_cast<MeshShape*>(shape.get())) continue;   // drawn with the effects
+
+        glm::vec3 center;
+        float radius;
+        shape->getBounds(center, radius);
+        if (!frustum.containsSphere(center, radius)) continue;
+        // Past the end of the fog, an object is the fog's color whether drawn or not.
+        if (fogEnd > 0.0f && glm::length(center - eye) - radius > fogEnd) continue;
+
+        shape->draw(lightingShader);
     }
 
     if (skybox) {
@@ -50,12 +118,58 @@ void SceneGraph::drawShadow(Shader& shadowShader) {
     drawDepth(shadowShader);
 }
 
+void SceneGraph::drawShadowCasters(Shader& depthShader, const glm::mat4& lightSpace) {
+    const Frustum frustum(lightSpace);
+    for (const auto& shape : shapes) {
+        if (!shape->castShadow || !shape->isVisibleInHierarchy()) continue;
+
+        glm::vec3 center;
+        float radius;
+        shape->getBounds(center, radius);
+        if (frustum.containsSphere(center, radius)) {
+            shape->draw(depthShader);
+        }
+    }
+}
+
 void SceneGraph::drawDepth(Shader& depthShader) {
     for (const auto& shape : shapes) {
         if (shape->castShadow && shape->isVisibleInHierarchy()) {
             shape->draw(depthShader);
         }
     }
+}
+
+int SceneGraph::getPointLights(glm::vec3 eye, glm::vec4* positions, glm::vec3* colors, int most) const {
+    struct Candidate {
+        float distance;
+        glm::vec4 position;
+        glm::vec3 color;
+    };
+    std::vector<Candidate> found;
+    for (const auto& shape : shapes) {
+        if (!shape->emissive || shape->lightRange <= 0.0f || !shape->isVisibleInHierarchy()) continue;
+        const glm::vec3 at = shape->getWorldPosition();
+        const float distance = glm::length(at - eye) - shape->lightRange;
+        if (fogEnd > 0.0f && distance > fogEnd) continue;
+        found.push_back({distance, glm::vec4(at, shape->lightRange), shape->lightColor});
+    }
+    for (const auto& fire : fires) {
+        if (fire->lightRange <= 0.0f || !fire->isVisibleInHierarchy() || !fire->burning) continue;
+        const glm::vec3 at = fire->getWorldPosition() + glm::vec3(0.0f, 0.5f * fire->size, 0.0f);
+        const float distance = glm::length(at - eye) - fire->lightRange;
+        if (fogEnd > 0.0f && distance > fogEnd) continue;
+        const float level = fire->lightLevel(animationTime);
+        found.push_back({distance, glm::vec4(at, fire->lightRange * (0.85f + 0.15f * level)), fire->lightColor * level});
+    }
+    const int count = std::min(most, (int)found.size());
+    std::partial_sort(found.begin(), found.begin() + count, found.end(),
+                      [](const Candidate& a, const Candidate& b) { return a.distance < b.distance; });
+    for (int i = 0; i < count; i++) {
+        positions[i] = found[i].position;
+        colors[i] = found[i].color;
+    }
+    return count;
 }
 
 glm::vec3 SceneGraph::getLightPos() const {
@@ -79,6 +193,14 @@ SceneObject* SceneGraph::add(std::shared_ptr<SceneObject> object, SceneObject* p
 
     if (auto shape = std::dynamic_pointer_cast<Shape>(object)) {
         shapes.push_back(std::move(shape));
+    } else if (auto emitter = std::dynamic_pointer_cast<ParticleEmitter>(object)) {
+        emitters.push_back(std::move(emitter));
+    } else if (auto fire = std::dynamic_pointer_cast<FireObject>(object)) {
+        fires.push_back(std::move(fire));
+    } else if (auto water = std::dynamic_pointer_cast<WaterObject>(object)) {
+        waters.push_back(std::move(water));
+    } else if (auto source = std::dynamic_pointer_cast<AudioSourceObject>(object)) {
+        audioSources.push_back(std::move(source));
     }
     objects.push_back(std::move(object));
 
@@ -103,6 +225,7 @@ void SceneGraph::remove(ObjectId id) {
     }
 
     roots.erase(std::remove(roots.begin(), roots.end(), target), roots.end());
+    colliders.clear();
 
     for (SceneObject* object : doomed) {
         lookup.erase(object->id);
@@ -114,15 +237,31 @@ void SceneGraph::remove(ObjectId id) {
     shapes.erase(std::remove_if(shapes.begin(), shapes.end(),
                                 [&](const std::shared_ptr<Shape>& s) { return isDoomed(s.get()); }),
                  shapes.end());
+    emitters.erase(std::remove_if(emitters.begin(), emitters.end(),
+                                  [&](const std::shared_ptr<ParticleEmitter>& e) { return isDoomed(e.get()); }),
+                   emitters.end());
+    fires.erase(std::remove_if(fires.begin(), fires.end(), [&](const std::shared_ptr<FireObject>& f) { return isDoomed(f.get()); }),
+                fires.end());
+    waters.erase(std::remove_if(waters.begin(), waters.end(), [&](const std::shared_ptr<WaterObject>& w) { return isDoomed(w.get()); }),
+                 waters.end());
+    audioSources.erase(std::remove_if(audioSources.begin(), audioSources.end(),
+                                      [&](const std::shared_ptr<AudioSourceObject>& a) { return isDoomed(a.get()); }),
+                       audioSources.end());
     objects.erase(std::remove_if(objects.begin(), objects.end(),
                                  [&](const std::shared_ptr<SceneObject>& o) { return isDoomed(o.get()); }),
                   objects.end());
 }
 
 void SceneGraph::clear() {
+    colliders.clear();
     roots.clear();
     lookup.clear();
     shapes.clear();
+    emitters.clear();
+    fires.clear();
+    waters.clear();
+    audioSources.clear();
+    waterAreas.clear();
     objects.clear();
     nextId = 1;
 }

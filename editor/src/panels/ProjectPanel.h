@@ -55,5 +55,6 @@ private:
 
     void promptNewFolder(EditorContext& ctx);
     void promptNewScene(EditorContext& ctx);
+    void promptNewScript(EditorContext& ctx, const ScriptBuilder::Template& source);
     void confirmTrash(EditorContext& ctx, const Entry& entry);
 };

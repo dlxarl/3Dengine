@@ -154,6 +154,22 @@ void ProjectPanel::promptNewScene(EditorContext& ctx) {
     });
 }
 
+void ProjectPanel::promptNewScript(EditorContext& ctx, const ScriptBuilder::Template& source) {
+    const ScriptBuilder::Template* chosen = &source;
+    ctx.dialogs.promptText("New script", "Script name", chosen->name, "Create script", [this, &ctx, chosen](const std::string& name) {
+        std::string error;
+        // Scripts collect in their own folder unless the user is somewhere else on purpose.
+        std::error_code ec;
+        const fs::path folder = fs::equivalent(currentFolder, ctx.project.assetsDir(), ec) ? ctx.project.assetsDir() / "Scripts" : currentFolder;
+        const fs::path file = ScriptBuilder::createFromTemplate(*chosen, name, folder, error);
+        if (file.empty()) return error;
+
+        rescanRequested = true;
+        ctx.setStatus("Created " + file.filename().u8string());
+        return std::string();
+    });
+}
+
 void ProjectPanel::confirmTrash(EditorContext& ctx, const Entry& entry) {
     const fs::path path = entry.path;
     const std::string assetPath = entry.assetPath;
@@ -187,7 +203,11 @@ void ProjectPanel::activate(EditorContext& ctx, const Entry& entry) {
                 ctx.setObjectTexture(shape->id, entry.assetPath);
             }
             break;
+        case AssetKind::Audio:
+            ctx.toolRequests.audio = entry.path;
+            break;
         default:
+            if (isTextAsset(entry.path)) ctx.toolRequests.code = entry.path;
             break;
     }
 }
@@ -322,6 +342,15 @@ void ProjectPanel::drawEntryMenu(EditorContext& ctx, const Entry& entry) {
             ctx.setObjectTexture(shape->id, entry.assetPath);
         }
     }
+    if (isTextAsset(entry.path) && ImGui::MenuItem("Edit in Code Editor")) {
+        ctx.toolRequests.code = entry.path;
+    }
+    if (entry.kind == AssetKind::Audio && ImGui::MenuItem("Edit in Audio Editor")) {
+        ctx.toolRequests.audio = entry.path;
+    }
+    if (entry.kind == AssetKind::Model && ImGui::MenuItem("Edit in Model Editor")) {
+        ctx.toolRequests.model = entry.path;
+    }
     if (entry.kind == AssetKind::Folder && ImGui::MenuItem("Open")) {
         navigateTo = entry.path;
     }
@@ -341,6 +370,13 @@ void ProjectPanel::drawBackgroundMenu(EditorContext& ctx) {
 
     if (ImGui::MenuItem("New folder")) promptNewFolder(ctx);
     if (ImGui::MenuItem("New scene file")) promptNewScene(ctx);
+    if (ImGui::BeginMenu("New script")) {
+        for (const ScriptBuilder::Template& source : ScriptBuilder::templates()) {
+            if (ImGui::MenuItem(source.name)) promptNewScript(ctx, source);
+            if (ImGui::IsItemHovered()) Widgets::tooltip(source.description);
+        }
+        ImGui::EndMenu();
+    }
     if (Platform::hasNativeDialogs()) {
         if (ImGui::MenuItem("Import")) chooseAndImport(ctx);
         ImGui::Separator();

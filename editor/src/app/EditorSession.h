@@ -1,5 +1,9 @@
 #pragma once
 #include "AssetThumbnails.h"
+#include "AudioEditorPanel.h"
+#include "ModelEditorPanel.h"
+#include "TerrainEditorPanel.h"
+#include "CodeEditorPanel.h"
 #include "ConsolePanel.h"
 #include "EditorContext.h"
 #include "HierarchyPanel.h"
@@ -36,16 +40,24 @@ private:
     ConsolePanel consolePanel;
     RenderSettingsPanel renderSettings;
     ViewportPanel viewport;
+    CodeEditorPanel codeEditor;
+    AudioEditorPanel audioEditor;
+    TerrainEditorPanel terrainEditor;
+    ModelEditorPanel modelEditor;
     MainBars bars;
     PanelVisibility panels;
 
     bool layoutPending;
+    std::string appliedUiFont;
 
     bool mouseCaptured = false;
     bool windowWasFocused = false;
     double lastCursorX = 0.0;
     double lastCursorY = 0.0;
 
+    int windowedX = 0, windowedY = 0, windowedWidth = 1600, windowedHeight = 960;
+
+    void applyFullscreen(bool wanted);
     void updateMouseCapture();
     void addMouseLook(GameInput& input);
 };

@@ -7,7 +7,9 @@
 #include "ImGuiLayer.h"
 #include "MeshShape.h"
 #include "ObjectFactory.h"
+#include "EditMesh.h"
 #include "Player.h"
+#include "Terrain.h"
 #include "SceneSerializer.h"
 #include "TestSupport.h"
 
@@ -205,6 +207,25 @@ namespace {
         CHECK(ctx.selectedObject == InvalidObjectId);
     }
 
+    // The Inspector draws every kind of effect, and what is made there is part of the scene.
+    void testEffectObjects(Driver& ui, EditorContext& ctx) {
+        for (ObjectType type : {ObjectType::Particles, ObjectType::Fire, ObjectType::Water, ObjectType::AudioSource}) {
+            SceneObject* object = ctx.createObject(type);
+            CHECK(object && object->getType() == type);
+            ctx.select(object->id);
+            ui.frames(4);
+            CHECK(ctx.selectedObject == object->id);
+        }
+        CHECK(ctx.scene().getEmitters().size() == 1 && ctx.scene().getFires().size() == 1 && ctx.scene().getWaters().size() == 1 && ctx.scene().getAudioSources().size() == 1);
+        for (const SceneObject* object : {(const SceneObject*)ctx.scene().getEmitters()[0].get(), (const SceneObject*)ctx.scene().getFires()[0].get(),
+                                          (const SceneObject*)ctx.scene().getWaters()[0].get(),
+                                          (const SceneObject*)ctx.scene().getAudioSources()[0].get()}) {
+            ctx.scene().remove(object->id);
+        }
+        ctx.select(InvalidObjectId);
+        ui.frames(2);
+    }
+
     void testRename(Driver& ui, EditorContext& ctx) {
         ui.doubleClick(ui.hierarchyRow(2));
         ui.type("Renamed");
@@ -351,6 +372,102 @@ namespace {
         CHECK(ctx.scene().find(cube)->position.y == 5.0f);
     }
 
+    // A script made from the PlayerControl template walks a Player that has no game rules,
+    // and 2D elements exist in the scene without any of the engine's game.
+    void testScripts(Driver& ui, EditorContext& ctx) {
+        ctx.document.createNew();
+        ui.frames(2);
+
+        SceneObject* floor = ctx.createObject(ObjectType::Cube);
+        floor->setPosition(glm::vec3(0.0f, -0.5f, 0.0f));
+        floor->setScale(glm::vec3(60.0f, 1.0f, 60.0f));
+        static_cast<Shape*>(floor)->isStatic = true;
+        ctx.createObject(ObjectType::Camera);
+        SceneObject* player = ctx.createObject(ObjectType::Player);
+        player->setPosition(glm::vec3(0.0f, 1.2f, 0.0f));
+        const ObjectId playerId = player->id;
+        SceneObject* hud = ctx.createUi("HUD");
+        CHECK(hud && hud->getChildren().size() == 3);
+        SceneObject* menu = ctx.createUi("Menu");
+        CHECK(menu && menu->getChildren().size() == 1);
+
+        std::string error;
+        const ScriptBuilder::Template& source = ScriptBuilder::templates()[0];
+        const fs::path file = ScriptBuilder::createFromTemplate(source, "PlayerControl", ctx.project.assetsDir() / "Scripts", error);
+        CHECK(!file.empty());
+        CHECK(!ScriptBuilder::createFromTemplate(source, "PlayerControl", ctx.project.assetsDir() / "Scripts", error).empty() == false);
+        CHECK(ScriptBuilder::createFromTemplate(source, "1bad", ctx.project.assetsDir() / "Scripts", error).empty());
+        CHECK(ScriptBuilder::scan(ctx.project).size() == 1 && ScriptBuilder::scan(ctx.project)[0].name == "PlayerControl");
+
+        player->script = "PlayerControl";
+
+        // Without the script the player stands where it is: the engine's game does not move it.
+        ui.key(ImGuiKey_P, COMMAND);
+        CHECK(ctx.play.isPlaying() && !ctx.play.getGameStatus().hasPlayer);
+        ui.runFor(0.4);
+        CHECK(ctx.scene().find(playerId)->position.y < 1.3f);
+        const glm::vec3 start = ctx.scene().find(playerId)->position;
+
+        ImGui::GetIO().AddKeyEvent(ImGuiKey_W, true);
+        ui.runFor(0.5);
+        ImGui::GetIO().AddKeyEvent(ImGuiKey_W, false);
+        ui.frames(2);
+        CHECK(ctx.scene().find(playerId)->position.z < start.z - 0.5f);
+
+        ui.key(ImGuiKey_P, COMMAND);
+        ui.frames(2);
+        CHECK(ctx.play.isStopped());
+        CHECK(ctx.scene().find(playerId)->position.z == start.z);
+    }
+
+    // Source files open in the Code Editor, or in the program the user chose instead.
+    void testCodeEditor(Driver& ui, EditorContext& ctx) {
+        const fs::path file = ctx.project.assetsDir() / "notes.txt";
+        std::ofstream(file) << "one\ntwo\n";
+
+        ctx.toolRequests.code = file;
+        ui.frames(3);
+        CHECK(ctx.toolRequests.code.empty());
+
+        ctx.settings.externalEditor = "cp {file} {file}.opened";
+        ctx.toolRequests.code = file;
+        ui.frames(3);
+        for (int i = 0; i < 50 && !fs::exists(file.string() + ".opened"); i++) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        CHECK(fs::exists(file.string() + ".opened"));
+        ctx.settings.externalEditor.clear();
+        CHECK(isTextAsset("a.cpp") && isTextAsset("B.JSON") && !isTextAsset("a.png"));
+    }
+
+    // The editors open the files they are asked for and draw them without trouble.
+    void testToolEditors(Driver& ui, EditorContext& ctx) {
+        std::string error;
+        const fs::path model = ctx.project.assetsDir() / "tool_cube.obj";
+        CHECK(EditMesh::cube(2.0f).saveObj(model, &error));
+        ctx.toolRequests.model = model;
+        ui.frames(6);
+        CHECK(ctx.toolRequests.model.empty());
+
+        AudioClip clip;
+        clip.sampleRate = 8000;
+        for (int i = 0; i < 4000; i++) clip.samples.push_back((int16_t)(std::sin(i * 0.1f) * 12000));
+        const fs::path sound = ctx.project.assetsDir() / "tool_tone.wav";
+        CHECK(saveWav(clip, sound.string(), &error));
+        ctx.toolRequests.audio = sound;
+        ui.frames(6);
+        CHECK(ctx.toolRequests.audio.empty());
+
+        // A terrain made from the menu draws, and the brush shapes it.
+        SceneObject* created = ctx.createObject(ObjectType::Terrain);
+        auto* terrain = static_cast<TerrainObject*>(created);
+        terrain->reset(16, 1.0f);
+        ui.frames(3);
+        CHECK(terrain->getMesh() && !terrain->needsRebuild());
+        terrain->applyBrush(TerrainObject::Brush::Raise, glm::vec2(0.0f), 3.0f, 5.0f, 0.5f, 0.2f);
+        CHECK(terrain->needsRebuild());
+        ui.frames(3);
+        CHECK(!terrain->needsRebuild() && terrain->getMesh()->getBoundsMax().y > 0.5f);
+    }
+
     void testGameControls(Driver& ui, EditorContext& ctx) {
         auto holdKey = [&](ImGuiKey key, int frames) {
             ImGui::GetIO().AddKeyEvent(key, true);
@@ -365,6 +482,8 @@ namespace {
         static_cast<Shape*>(floor)->isStatic = true;
 
         SceneObject* created = ctx.createObject(ObjectType::Player);
+        CHECK(!static_cast<Player*>(created)->gameControls);   // a new player does nothing by itself
+        static_cast<Player*>(created)->gameControls = true;
         created->setPosition(glm::vec3(0.0f, -18.5f, 0.0f));
         const ObjectId player = created->id;
         ui.frames(2);
@@ -376,7 +495,10 @@ namespace {
 
         const glm::vec3 start = ctx.scene().find(player)->position;
 
-        holdKey(ImGuiKey_W, 30);
+        ImGui::GetIO().AddKeyEvent(ImGuiKey_W, true);
+        ui.runFor(0.3);
+        ImGui::GetIO().AddKeyEvent(ImGuiKey_W, false);
+        ui.frames(2);
         const glm::vec3 walked = ctx.scene().find(player)->position;
         CHECK(walked.z < start.z - 0.05f);
 
@@ -411,10 +533,13 @@ namespace {
         ui.frames(2);
         CHECK(ctx.wantsMouseCapture);
 
-        // Back to third person frees it.
+        // Third person keeps mouse look; Esc frees the mouse there too.
         ui.key(ImGuiKey_V);
         ui.frames(2);
-        CHECK(!ctx.wantsMouseCapture);
+        CHECK(!ctx.play.getGameStatus().firstPerson);
+        CHECK(ctx.wantsMouseCapture);
+        ui.key(ImGuiKey_Escape);
+        ui.frames(2);
         CHECK((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_NoMouse) == 0);
 
         // R starts over without leaving Play mode.
@@ -517,12 +642,16 @@ int main() {
 
         testSelectionAndHierarchy(ui, ctx);
         testRename(ui, ctx);
+        testEffectObjects(ui, ctx);
         testShortcuts(ui, ctx);
         testViewportPickingAndGizmo(ui, ctx);
         testAssetBrowser(ui, ctx, outside);
         testPlayToolbar(ui, ctx);
         testGameControls(ui, ctx);
         testUnsavedChangesDialog(ui, ctx);
+        testScripts(ui, ctx);
+        testCodeEditor(ui, ctx);
+        testToolEditors(ui, ctx);
     }
 
     return testSummary("ui_tests");

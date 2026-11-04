@@ -20,10 +20,16 @@ public:
 
     ImFont* uiFont() const { return ui; }
     ImFont* monoFont() const { return mono; }
+    ImFont* gameFont() const { return game; }
+
+    // The font of the game's own interface. An empty or unreadable path is the bundled Inter.
+    ImFont* setGameFont(const std::string& path);
 
 private:
     ImGuiContext* context = nullptr;
     ImFont* ui = nullptr;
     ImFont* mono = nullptr;
+    ImFont* game = nullptr;
+    ImFont* bundledGame = nullptr;
     std::string layoutPath;  // ImGui keeps the pointer, so the string must outlive the context
 };

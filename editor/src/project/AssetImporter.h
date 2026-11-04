@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <string>
 
-enum class AssetKind { Folder, Texture, Model, Scene, Material, Audio, Script, Other };
+enum class AssetKind { Folder, Texture, Model, Scene, Material, Audio, Script, Font, Other };
 
 AssetKind classifyAsset(const std::filesystem::path& path);
 

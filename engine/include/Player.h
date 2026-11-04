@@ -19,6 +19,10 @@ public:
 
     glm::vec3 getCameraPosition() const;
 
+    // Whether the engine's game rules drive this player: movement, camera, combat, the HUD.
+    // Off, the player is an ordinary object that scripts move.
+    bool gameControls = true;
+
     float runSpeed = 5.0f;
 
 private:

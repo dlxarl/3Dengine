@@ -7,7 +7,7 @@ namespace UserPaths {
     std::filesystem::path home();
 
     // Where the Editor keeps its own preferences, such as the recent projects list.
-    // ~/Library/Application Support/3D Engine on macOS; $ENGINE_USER_DATA_DIR overrides it.
+    // ~/Library/Application Support/Aureon on macOS; $ENGINE_USER_DATA_DIR overrides it.
     std::filesystem::path configDir();
 
     std::filesystem::path defaultProjectsDir();

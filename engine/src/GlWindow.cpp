@@ -1,6 +1,8 @@
 #include "GlWindow.h"
 #include "Log.h"
 
+#include <cstring>
+
 namespace {
     int libraryUsers = 0;
 }
@@ -8,6 +10,10 @@ namespace {
 GlfwLibrary::GlfwLibrary() {
     if (libraryUsers == 0) {
         glfwSetErrorCallback([](int code, const char* description) {
+            // Raised on every monitor query for a display with no usable area, such as
+            // one showing another Space. Nothing depends on it, and it would flood the log.
+            if (std::strstr(description, "workarea")) return;
+
             Log::error("GLFW", std::to_string(code) + ": " + description);
         });
         ready = glfwInit() == GLFW_TRUE;
