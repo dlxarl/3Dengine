@@ -211,17 +211,6 @@ void InspectorPanel::drawShape(EditorContext& ctx, Shape& shape) {
                 ctx.document.markDirty();
             }
 
-            Widgets::propertyLabel("Light range", "While emissive, it lights everything this near, like a fire. "
-                                                  "The eight nearest to the camera shine.");
-            if (ImGui::DragFloat("##lightRange", &shape.lightRange, 0.1f, 0.0f, 60.0f, "%.1f")) {
-                ctx.document.markDirty();
-            }
-            if (shape.lightRange > 0.0f) {
-                Widgets::propertyLabel("Light color");
-                if (ImGui::ColorEdit3("##lightColor", &shape.lightColor.x)) {
-                    ctx.document.markDirty();
-                }
-            }
             ImGui::EndTable();
         }
     }
@@ -246,103 +235,6 @@ void InspectorPanel::drawShape(EditorContext& ctx, Shape& shape) {
         }
     }
 
-    drawGameplay(ctx, shape);
-}
-
-void InspectorPanel::drawGameplay(EditorContext& ctx, Shape& shape) {
-    if (!Widgets::section("Gameplay")) return;
-
-    if (shape.getType() == ObjectType::Player) {
-        Widgets::wrappedDim("Controlled with the keyboard in the Game view. It starts from where you place it.");
-        return;
-    }
-
-    static const char* const ROLE_LABELS[] = {"None", "Pickup", "Goal", "Hazard", "Ground", "Villager", "Bandit",
-                                              "Horse", "Player body", "Sword", "Bow", "Arrow", "Item", "Chest",
-                                              "Bed", "Sign", "Water", "Deer", "Wolf", "Livestock", "Limb",
-                                              "Night glow", "Boar", "Bear", "Rabbit", "Bird", "Dragon",
-                                              "Fireball"};
-    static const char* const ROLE_HINTS[] = {
-        nullptr,
-        "Collected by touching it. All of them open the goal.",
-        "Reaching it wins the game, once every pickup is collected.",
-        "Touching it sends the player back to the start.",
-        "A mesh to walk on, whatever its shape.",
-        "Wanders near where you place it, and runs from danger.",
-        "Chases and strikes the player. Defeating them all wins the game.",
-        "Ridden with F, at a much higher speed.",
-        "How the player looks. The Player object then acts only as the collider.",
-        "Held by the player. Having a weapon turns on health and combat.",
-        "Held by the player. Having a weapon turns on health and combat.",
-        "One arrow the bow can fire. Add several, so that more can fly at once.",
-        "Taken with F. Name the item, and optionally how many: moonleaf or moonleaf:2.",
-        "Opened once with F. List what is inside: potion:2, gold:25.",
-        "Sleeping in it passes the night and restores health.",
-        "Read with F.",
-        "The surface of deep water, where the player swims.",
-        "Grazes, and bolts when the player comes near.",
-        "Hunts in packs, and sees further at night.",
-        "Wanders slowly, and only runs when hurt.",
-        "Swings with its parent's walk, like a leg or an arm.",
-        "Lit from dusk to dawn, like a window or a lantern.",
-        "Charges whoever comes too close.",
-        "Slow to anger, and hits hard.",
-        "Darts away when the player comes near.",
-        "Pecks about, and takes to the air when disturbed. Give it limbs that swing up and down for wings.",
-        "Sleeps here until the player comes near; then flies, breathes fire, swoops, and lands to fight when hurt.",
-        "What dragons breathe. Add a few, hidden until a dragon needs them.",
-    };
-    static_assert(IM_ARRAYSIZE(ROLE_LABELS) == IM_ARRAYSIZE(ROLE_HINTS), "a label and a hint for each role");
-
-    if (beginProperties("##gameplay")) {
-        Widgets::propertyLabel("Role");
-        int role = (int)shape.gameRole;
-        if (ImGui::Combo("##role", &role, ROLE_LABELS, IM_ARRAYSIZE(ROLE_LABELS))) {
-            shape.gameRole = (GameRole)role;
-            ctx.document.markDirty();
-        }
-
-        const char* parameterLabel = shape.gameRole == GameRole::Item    ? "Item"
-                                   : shape.gameRole == GameRole::Chest   ? "Contents"
-                                   : shape.gameRole == GameRole::Sign    ? "Text"
-                                   : nullptr;
-        if (parameterLabel) {
-            Widgets::propertyLabel(parameterLabel);
-            std::string parameter = shape.gameParameter;
-            if (Widgets::inputText("##gameParameter", parameter)) {
-                shape.gameParameter = parameter;
-                ctx.document.markDirty();
-            }
-        }
-
-        if (shape.gameRole == GameRole::Limb) {
-            Widgets::propertyLabel("Swing", "Degrees either way at a full stride.");
-            if (ImGui::DragFloat("##limbSwing", &shape.limbSwing, 0.5f, 0.0f, 90.0f, "%.1f")) ctx.document.markDirty();
-            Widgets::propertyLabel("Phase", "Degrees ahead of the stride. Opposite legs differ by 180.");
-            if (ImGui::DragFloat("##limbPhase", &shape.limbPhase, 1.0f, -360.0f, 360.0f, "%.0f")) ctx.document.markDirty();
-            static const char* const AXIS_LABELS[] = {"Forward and back", "Side to side", "Up and down (wings)"};
-            Widgets::propertyLabel("Swings", "Legs and arms swing forward and back with the walk; wings beat up and down in flight.");
-            if (ImGui::Combo("##limbAxis", &shape.limbAxis, AXIS_LABELS, IM_ARRAYSIZE(AXIS_LABELS))) ctx.document.markDirty();
-        }
-
-        if (shape.gameRole == GameRole::Hazard) {
-            if (Widgets::vec3Row("Patrol", shape.patrolOffset, 0.05f, 0.0f)) {
-                ctx.document.markDirty();
-            }
-            if (ImGui::IsItemHovered()) Widgets::tooltip("How far it swings either side of its position.");
-
-            Widgets::propertyLabel("Patrol seconds", "How long one full swing takes.");
-            if (ImGui::DragFloat("##patrolSeconds", &shape.patrolSeconds, 0.05f, 0.1f, 60.0f, "%.2f")) {
-                ctx.document.markDirty();
-            }
-        }
-        ImGui::EndTable();
-    }
-
-    if (const char* hint = ROLE_HINTS[(int)shape.gameRole]) {
-        ImGui::Spacing();
-        Widgets::wrappedDim(hint);
-    }
 }
 
 void InspectorPanel::drawLight(EditorContext& ctx, LightObject& light) {

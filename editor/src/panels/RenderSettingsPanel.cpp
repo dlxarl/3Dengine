@@ -70,25 +70,18 @@ void RenderSettingsPanel::drawRendering(EditorContext& ctx) {
     if (!Widgets::section("Rendering")) return;
 
     if (beginProperties("##rendering")) {
-        Widgets::propertyLabel("Rendering Mode");
-        const char* preview = "";
-        const char* description = "";
-        for (const ModeOption& option : MODE_OPTIONS) {
-            if (option.mode == settings.mode) {
-                preview = option.label;
-                description = option.description;
-            }
-        }
-        if (ImGui::BeginCombo("##mode", preview)) {
+        // A preset loads a look in one go; nothing remembers which one it was, and every setting stays editable.
+        Widgets::propertyLabel("Retro preset", "Loads the image settings of a console: PS1 or PS2 lighting, resolution, dithering and color depth. Modern puts them back. The post-processing stack is kept.");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##preset", "Apply a preset...")) {
             for (const ModeOption& option : MODE_OPTIONS) {
-                if (ImGui::Selectable(option.label, option.mode == settings.mode)) {
-                    // Choosing a mode loads its whole look. Each setting stays editable afterwards.
-                    // The post-processing stack is the project's own; a mode only sets the retro look.
+                if (ImGui::Selectable(option.label)) {
                     const PostSettings keep = settings.post;
                     settings = RenderSettings::preset(option.mode);
                     settings.post = keep;
                     ctx.graphicsChanged();
                 }
+                if (ImGui::IsItemHovered()) Widgets::tooltip(option.description);
             }
             ImGui::EndCombo();
         }
@@ -102,9 +95,6 @@ void RenderSettingsPanel::drawRendering(EditorContext& ctx) {
         ImGui::EndDisabled();
 
         ImGui::EndTable();
-
-        ImGui::Spacing();
-        Widgets::wrappedDim(description);
     }
 }
 
