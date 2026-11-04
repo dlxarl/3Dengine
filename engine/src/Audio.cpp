@@ -22,6 +22,41 @@ namespace {
     }
 }
 
+bool saveWav(const AudioClip& clip, const std::string& path, std::string* error) {
+    if (clip.channels < 1 || clip.channels > 2 || clip.samples.empty()) {
+        if (error) *error = "There is no sound to save.";
+        return false;
+    }
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        if (error) *error = "Cannot write " + path;
+        return false;
+    }
+
+    auto put32 = [&out](uint32_t v) { out.write(reinterpret_cast<const char*>(&v), 4); };
+    auto put16 = [&out](uint16_t v) { out.write(reinterpret_cast<const char*>(&v), 2); };
+    const uint32_t dataBytes = (uint32_t)(clip.samples.size() * 2);
+
+    out.write("RIFF", 4);
+    put32(36 + dataBytes);
+    out.write("WAVEfmt ", 8);
+    put32(16);
+    put16(1);                                      // PCM
+    put16((uint16_t)clip.channels);
+    put32((uint32_t)clip.sampleRate);
+    put32((uint32_t)(clip.sampleRate * clip.channels * 2));
+    put16((uint16_t)(clip.channels * 2));
+    put16(16);
+    out.write("data", 4);
+    put32(dataBytes);
+    out.write(reinterpret_cast<const char*>(clip.samples.data()), dataBytes);
+    if (!out) {
+        if (error) *error = "Writing " + path + " failed.";
+        return false;
+    }
+    return true;
+}
+
 std::shared_ptr<AudioClip> loadWav(const std::string& path, std::string* error) {
     auto fail = [&](const std::string& why) -> std::shared_ptr<AudioClip> {
         if (error) *error = why;

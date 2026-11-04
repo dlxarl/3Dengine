@@ -1,4 +1,5 @@
 #include "AssetImporter.h"
+#include "AudioEdit.h"
 #include "AssetManager.h"
 #include "ObjLoader.h"
 #include "Project.h"
@@ -326,6 +327,68 @@ namespace {
     }
 }
 
+void testAudioEdit() {
+    AudioClip clip;
+    clip.channels = 2;
+    clip.sampleRate = 1000;
+    for (int i = 0; i < 100; i++) {
+        clip.samples.push_back((int16_t)(i * 100));
+        clip.samples.push_back((int16_t)(-i * 100));
+    }
+    CHECK(clip.frames() == 100);
+
+    // Ranges outside the clip are brought inside it.
+    const AudioEdit::Range outside = AudioEdit::clamp(clip, {90, 500});
+    CHECK(outside.begin == 90 && outside.end == 100);
+
+    AudioClip trimmed = clip;
+    AudioEdit::trim(trimmed, {10, 30});
+    CHECK(trimmed.frames() == 20 && trimmed.samples[0] == 1000 && trimmed.samples[1] == -1000);
+
+    AudioClip cut = clip;
+    AudioEdit::cut(cut, {10, 30});
+    CHECK(cut.frames() == 80 && cut.samples[20] == 3000);
+
+    AudioClip reversed = clip;
+    AudioEdit::reverse(reversed, {0, 100});
+    CHECK(reversed.samples[0] == 9900 && reversed.samples[198] == 0 && reversed.samples[199] == 0);
+
+    AudioClip faded = clip;
+    AudioEdit::fadeIn(faded, {0, 100});
+    CHECK(faded.samples[0] == 0 && faded.samples[198] == 9900);
+    CHECK(faded.samples[100] < clip.samples[100] && faded.samples[100] > 0);
+
+    // Normalizing brings the loudest sample to the level, and gain in decibels is a factor.
+    AudioClip loud = clip;
+    AudioEdit::normalize(loud, {0, 100}, 0.5f);
+    CHECK(std::abs(AudioEdit::peak(loud, {0, 100}) - 0.5f) < 0.01f);
+    AudioClip doubled = clip;
+    AudioEdit::gain(doubled, {0, 100}, 6.0206f);
+    CHECK(std::abs(doubled.samples[2] - 2 * clip.samples[2]) <= 1);
+    AudioClip clipped = clip;
+    AudioEdit::gain(clipped, {0, 100}, 40.0f);
+    CHECK(clipped.samples[198] == 32767 && clipped.samples[199] == -32768);
+
+    AudioClip faster = clip;
+    AudioEdit::resample(faster, 2.0f);
+    CHECK(faster.frames() >= 49 && faster.frames() <= 51);
+
+    AudioClip mono = clip;
+    AudioEdit::toMono(mono);
+    CHECK(mono.channels == 1 && mono.frames() == 100 && mono.samples[50] == 0);
+
+    // A saved file reads back as what was written.
+    TempDir temp;
+    const std::string file = (temp.path / "edit.wav").string();
+    std::string error;
+    CHECK(saveWav(clip, file, &error));
+    std::shared_ptr<AudioClip> loaded = loadWav(file, &error);
+    CHECK(loaded && loaded->channels == 2 && loaded->sampleRate == 1000 && loaded->samples == clip.samples);
+
+    AudioClip silent;
+    CHECK(!saveWav(silent, file, &error));
+}
+
 int main() {
     testNameValidation();
     testCreateProducesExpectedLayout();
@@ -339,5 +402,6 @@ int main() {
     testImport();
     testObjLoader();
     testUserPaths();
+    testAudioEdit();
     return testSummary("project_tests");
 }

@@ -225,12 +225,18 @@ void EditorSession::frame() {
     if (panels.console) consolePanel.draw(ctx, &panels.console);
     viewport.draw(ctx);
 
+    ctx.textEditorFocused = false;
+
     // Files other panels asked the tools to open.
     if (!ctx.toolRequests.code.empty()) {
         if (ctx.settings.externalEditor.empty()) panels.codeEditor = true;
         codeEditor.openFile(ctx, ctx.toolRequests.code, ctx.toolRequests.codeLine);
         ctx.toolRequests.code.clear();
         ctx.toolRequests.codeLine = 1;
+    }
+    if (panels.audioEditor || !ctx.toolRequests.audio.empty()) {
+        if (!ctx.toolRequests.audio.empty()) panels.audioEditor = true;
+        audioEditor.draw(ctx, &panels.audioEditor);
     }
     if (panels.codeEditor) codeEditor.draw(ctx, &panels.codeEditor);
 

@@ -22,6 +22,7 @@ add_library(editor_core STATIC
         src/project/AssetImporter.cpp
         src/project/Project.cpp
         src/project/RecentProjects.cpp
+        src/project/AudioEdit.cpp
         src/project/ScriptBuilder.cpp
         src/project/UserSettings.cpp
         src/project/ScriptTemplates.cpp
@@ -61,6 +62,7 @@ set(EDITOR_SOURCES
         src/panels/GameHud.cpp
         src/panels/UiLayer.cpp
         src/panels/CodeEditorPanel.cpp
+        src/panels/AudioEditorPanel.cpp
         src/panels/HierarchyPanel.cpp
         src/panels/InspectorPanel.cpp
         src/panels/MainBars.cpp

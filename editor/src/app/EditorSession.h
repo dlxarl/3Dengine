@@ -1,5 +1,6 @@
 #pragma once
 #include "AssetThumbnails.h"
+#include "AudioEditorPanel.h"
 #include "CodeEditorPanel.h"
 #include "ConsolePanel.h"
 #include "EditorContext.h"
@@ -38,6 +39,7 @@ private:
     RenderSettingsPanel renderSettings;
     ViewportPanel viewport;
     CodeEditorPanel codeEditor;
+    AudioEditorPanel audioEditor;
     MainBars bars;
     PanelVisibility panels;
 

@@ -243,7 +243,7 @@ void CodeEditorPanel::drawDocument(EditorContext& ctx, Document& doc) {
     ImGui::InputTextMultiline(id.c_str(), &doc.text, ImVec2(area.x - gutterWidth, area.y), ImGuiInputTextFlags_AllowTabInput);
     ImGui::PopStyleColor();
 
-    ctx.textEditorFocused = ImGui::IsItemActive() || ImGui::IsItemFocused();
+    ctx.textEditorFocused |= ImGui::IsItemActive() || ImGui::IsItemFocused();
 
     if (ImGuiInputTextState* state = ImGui::GetInputTextState(widgetId)) {
         doc.scrollY = state->Scroll.y;
@@ -274,14 +274,12 @@ void CodeEditorPanel::drawDocument(EditorContext& ctx, Document& doc) {
 void CodeEditorPanel::draw(EditorContext& ctx, bool* open) {
     ImGui::SetNextWindowSize(ImVec2(780.0f, 520.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Code Editor", open)) {
-        ctx.textEditorFocused = false;
         ImGui::End();
         return;
     }
 
     // Cmd+S saves the file here, not the scene.
     const bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-    if (!focused) ctx.textEditorFocused = false;
     if (focused && active >= 0 && active < (int)documents.size() && ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S)) {
         save(ctx, documents[active]);
     }

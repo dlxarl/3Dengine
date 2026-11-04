@@ -22,6 +22,9 @@ struct AudioClip {
 // Returns an empty clip, and says why in error, when the file cannot be read as WAV.
 std::shared_ptr<AudioClip> loadWav(const std::string& path, std::string* error = nullptr);
 
+// Writes the clip as a 16 bit PCM WAV file. False, with the reason in error, when it cannot.
+bool saveWav(const AudioClip& clip, const std::string& path, std::string* error = nullptr);
+
 struct SoundOptions {
     float volume = 1.0f;
     float pitch = 1.0f;       // 2 is an octave up and twice as fast
