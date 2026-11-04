@@ -193,6 +193,7 @@ void EditorSession::frame() {
     ctx.play.update(deltaTime, input);
     if (ctx.play.isStopped()) ctx.scene().animate(deltaTime);   // fires burn and water moves while editing
     ctx.updateAutosave(deltaTime);
+    ctx.updateUndo();
 
     if (fullscreen) {
         bars.drawFullscreen(ctx, panels);

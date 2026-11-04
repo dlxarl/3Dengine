@@ -17,7 +17,10 @@ std::string SceneDocument::getDisplayName() const {
 }
 
 void SceneDocument::markDirty() {
-    if (trackingChanges) dirty = true;
+    if (trackingChanges) {
+        dirty = true;
+        revisionCount++;
+    }
 }
 
 void SceneDocument::createNew() {
@@ -37,6 +40,7 @@ void SceneDocument::createNew() {
     scene = std::move(fresh);
     assetPath.clear();
     dirty = false;
+    epochCount++;
 }
 
 bool SceneDocument::open(const std::string& newAssetPath, std::string* error) {
@@ -53,6 +57,7 @@ bool SceneDocument::open(const std::string& newAssetPath, std::string* error) {
     scene = std::move(loaded);
     assetPath = newAssetPath;
     dirty = false;
+    epochCount++;
 
     project.startupScene = assetPath;
     project.saveSettings();

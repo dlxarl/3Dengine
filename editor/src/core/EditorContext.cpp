@@ -1,4 +1,5 @@
 #include "EditorContext.h"
+#include "imgui.h"
 #include "Log.h"
 #include "MeshShape.h"
 #include "ObjectFactory.h"
@@ -283,6 +284,65 @@ const std::vector<ScriptInfo>& EditorContext::availableScripts() {
         scriptList = ScriptBuilder::scan(project);
     }
     return scriptList;
+}
+
+void EditorContext::updateUndo() {
+    // Play changes the scene only for as long as it plays, and is undone by Stop.
+    if (!play.isStopped()) return;
+
+    if (settledEpoch != document.epoch()) {
+        undoStack.clear();
+        redoStack.clear();
+        settledSnapshot = document.snapshot();
+        settledRevision = document.revision();
+        settledEpoch = document.epoch();
+        return;
+    }
+    if (settledRevision == document.revision()) return;
+
+    // A drag or a typed value is one step: it counts when the mouse is up and no field is held.
+    if (ImGui::IsAnyMouseDown() || ImGui::IsAnyItemActive()) return;
+
+    undoStack.push_back(std::move(settledSnapshot));
+    if (undoStack.size() > 30) undoStack.erase(undoStack.begin());
+    redoStack.clear();
+    settledSnapshot = document.snapshot();
+    settledRevision = document.revision();
+}
+
+void EditorContext::undo() {
+    if (!play.isStopped() || undoStack.empty()) return;
+    updateUndo();   // a change still in progress becomes a step first
+
+    std::string error;
+    redoStack.push_back(document.snapshot());
+    const std::string target = std::move(undoStack.back());
+    undoStack.pop_back();
+    if (!document.restore(target, &error)) {
+        Log::error("Editor", "Cannot undo: " + error);
+        return;
+    }
+    document.markDirty();
+    settledSnapshot = target;
+    settledRevision = document.revision();
+    if (!getSelected()) selectedObject = InvalidObjectId;
+}
+
+void EditorContext::redo() {
+    if (!play.isStopped() || redoStack.empty()) return;
+
+    std::string error;
+    undoStack.push_back(document.snapshot());
+    const std::string target = std::move(redoStack.back());
+    redoStack.pop_back();
+    if (!document.restore(target, &error)) {
+        Log::error("Editor", "Cannot redo: " + error);
+        return;
+    }
+    document.markDirty();
+    settledSnapshot = target;
+    settledRevision = document.revision();
+    if (!getSelected()) selectedObject = InvalidObjectId;
 }
 
 void EditorContext::startPlaying(bool fullscreen) {

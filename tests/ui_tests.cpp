@@ -438,6 +438,35 @@ namespace {
         CHECK(isTextAsset("a.cpp") && isTextAsset("B.JSON") && !isTextAsset("a.png"));
     }
 
+    // Cmd+Z takes back the last settled change, and Shift+Cmd+Z brings it back.
+    void testUndo(Driver& ui, EditorContext& ctx) {
+        ctx.document.createNew();
+        ui.frames(3);
+
+        SceneObject* cube = ctx.createObject(ObjectType::Cube);
+        const ObjectId id = cube->id;
+        ui.frames(3);
+        cube->setPosition(glm::vec3(4.0f, 0.0f, 0.0f));
+        ctx.document.markDirty();
+        ui.frames(3);
+        CHECK(ctx.canUndo());
+
+        ui.key(ImGuiKey_Z, COMMAND);
+        ui.frames(2);
+        CHECK(ctx.scene().find(id) && ctx.scene().find(id)->position.x == 0.0f);
+        ui.key(ImGuiKey_Z, COMMAND);
+        ui.frames(2);
+        CHECK(ctx.scene().find(id) == nullptr);
+
+        ctx.redo();
+        ui.frames(2);
+        CHECK(ctx.scene().find(id) != nullptr);
+        ctx.redo();
+        ui.frames(2);
+        CHECK(ctx.scene().find(id) && ctx.scene().find(id)->position.x == 4.0f);
+        CHECK(!ctx.canRedo());
+    }
+
     // The editors open the files they are asked for and draw them without trouble.
     void testToolEditors(Driver& ui, EditorContext& ctx) {
         std::string error;
@@ -650,6 +679,7 @@ int main() {
         testGameControls(ui, ctx);
         testUnsavedChangesDialog(ui, ctx);
         testScripts(ui, ctx);
+        testUndo(ui, ctx);
         testCodeEditor(ui, ctx);
         testToolEditors(ui, ctx);
     }

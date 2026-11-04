@@ -18,6 +18,10 @@ public:
     std::string getDisplayName() const;
 
     bool isDirty() const { return dirty; }
+
+    // Counts every change, and every time a different scene is put in place.
+    unsigned revision() const { return revisionCount; }
+    unsigned epoch() const { return epochCount; }
     void markDirty();
 
     // While true, edits are temporary (Play mode), so they do not mark the document.
@@ -42,4 +46,6 @@ private:
     std::string assetPath;
     bool dirty = false;
     bool trackingChanges = true;
+    unsigned revisionCount = 0;
+    unsigned epochCount = 0;
 };

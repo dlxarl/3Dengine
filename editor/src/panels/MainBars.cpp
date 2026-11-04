@@ -20,7 +20,7 @@ namespace {
     // Identifies a choice in the system menu bar.
     enum Command {
         NewScene = 1, Save, SaveAs, CloseProject, Quit,
-        Rename, Duplicate, Delete, FocusSelection,
+        Undo, Redo, Rename, Duplicate, Delete, FocusSelection,
         PlayStop, Pause, PlayFullscreen,
         ShowCodeEditor, ShowAudioEditor, ShowTerrainEditor, ShowModelEditor,
         ShowHierarchy, ShowInspector, ShowProject, ShowConsole, ShowRenderSettings, ResetLayout,
@@ -153,6 +153,9 @@ void MainBars::updateNativeMenu(EditorContext& ctx, PanelVisibility& panels) {
         item("Quit", Quit),
     }));
     menus.push_back(submenu("Edit", {
+        item("Undo", Undo, "z", ctx.canUndo() && editing),
+        item("Redo", Redo, "z", ctx.canRedo() && editing, true),
+        separator(),
         item("Rename", Rename, "", hasSelection),
         item("Duplicate", Duplicate, "d", hasSelection),
         item("Delete", Delete, "", hasSelection),
@@ -213,6 +216,8 @@ void MainBars::runCommand(int command, EditorContext& ctx, PanelVisibility& pane
         case SaveAs: if (ctx.play.isStopped()) ctx.saveSceneAs(); break;
         case CloseProject: ctx.closeProject(); break;
         case Quit: ctx.quit(); break;
+        case Undo: ctx.undo(); break;
+        case Redo: ctx.redo(); break;
         case Rename: if (ctx.getSelected()) ctx.requestRename(ctx.selectedObject); break;
         case Duplicate: ctx.duplicateSelected(); break;
         case Delete: ctx.deleteSelected(); break;
@@ -240,6 +245,13 @@ void MainBars::handleShortcuts(EditorContext& ctx) {
 
     // ImGuiMod_Ctrl is the Command key on macOS.
     if (!ctx.textEditorFocused && ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, global)) ctx.saveScene();
+    if (!ctx.textEditorFocused && !ImGui::GetIO().WantTextInput) {
+        if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z, global) || ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y, global)) {
+            ctx.redo();
+        } else if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z, global)) {
+            ctx.undo();
+        }
+    }
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S, global)) ctx.saveSceneAs();
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_N, global)) ctx.newScene();
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D, global)) ctx.duplicateSelected();
@@ -305,6 +317,9 @@ void MainBars::drawMenuBar(EditorContext& ctx, PanelVisibility& panels) {
 
     if (ImGui::BeginMenu("Edit")) {
         const bool hasSelection = ctx.getSelected() != nullptr;
+        if (ImGui::MenuItem("Undo", "Cmd+Z", false, ctx.canUndo() && editing)) ctx.undo();
+        if (ImGui::MenuItem("Redo", "Shift+Cmd+Z", false, ctx.canRedo() && editing)) ctx.redo();
+        ImGui::Separator();
         if (ImGui::MenuItem("Rename", "F2", false, hasSelection)) ctx.requestRename(ctx.selectedObject);
         if (ImGui::MenuItem("Duplicate", "Cmd+D", false, hasSelection)) ctx.duplicateSelected();
         if (ImGui::MenuItem("Delete", "Delete", false, hasSelection)) ctx.deleteSelected();
