@@ -59,8 +59,6 @@ void RenderSettingsPanel::draw(EditorContext& ctx, bool* open) {
     drawImage(ctx);
     drawPost(ctx);
     drawEnvironment(ctx);
-    drawInterface(ctx);
-
     ImGui::End();
 }
 
@@ -330,16 +328,6 @@ void RenderSettingsPanel::drawEnvironment(EditorContext& ctx) {
             ctx.document.markDirty();
         }
 
-        ImGui::EndTable();
-    }
-}
-
-void RenderSettingsPanel::drawInterface(EditorContext& ctx) {
-    if (!Widgets::section("Game UI")) return;
-
-    if (beginProperties("##gameUi")) {
-        Widgets::propertyLabel("Font", "The font of text in the game's own interface. Inter unless you choose another .ttf or .otf.");
-        if (Widgets::assetSlot("uiFont", ctx.project.uiFont, AssetKind::Font)) ctx.graphicsChanged();
         ImGui::EndTable();
     }
 }

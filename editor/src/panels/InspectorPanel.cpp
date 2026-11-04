@@ -461,6 +461,8 @@ void InspectorPanel::drawUi(EditorContext& ctx, UiObject& ui) {
                 changed = true;
             }
             changed |= slider("Font size", "##fontSize", ui.fontSize, 8.0f, 120.0f, "%.0f");
+            Widgets::propertyLabel("Font", "A .ttf or .otf from the project, for this text only. Inter when empty.");
+            changed |= Widgets::assetSlot("font", ui.font, AssetKind::Font);
         }
         if (ui.kind == UiKind::Text) {
             int align = ui.align;

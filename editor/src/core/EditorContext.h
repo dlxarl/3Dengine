@@ -71,6 +71,9 @@ public:
     ImFont* monoFont = nullptr;
     ImFont* gameFont = nullptr;
 
+    // The font for a path under Assets; Inter for none.
+    std::function<ImFont*(const std::string&)> fontFor;
+
     SceneGraph& scene() { return document.getScene(); }
 
     // Selection. An object and an asset are mutually exclusive; the Inspector shows either.

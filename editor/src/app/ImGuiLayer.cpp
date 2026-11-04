@@ -53,21 +53,25 @@ ImGuiLayer::ImGuiLayer(GLFWwindow* window, const std::string& layoutFile) : layo
     ImGui_ImplOpenGL3_Init("#version 330 core");
 }
 
-ImFont* ImGuiLayer::setGameFont(const std::string& path) {
-    ImFont* chosen = bundledGame;
+ImFont* ImGuiLayer::fontFor(const std::string& path) {
+    if (path.empty()) return bundledGame;
+    auto found = loadedFonts.find(path);
+    if (found != loadedFonts.end()) return found->second ? found->second : bundledGame;
+
+    ImFont* loaded = nullptr;
     std::error_code ec;
-    if (!path.empty() && std::filesystem::exists(path, ec)) {
-        if (ImFont* loaded = ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), GAME_FONT_SIZE)) {
-            chosen = loaded;
-        } else {
-            Log::warn("Editor", "Cannot read the font, using Inter: " + path);
-        }
-    } else if (!path.empty()) {
+    if (std::filesystem::exists(path, ec)) {
+        loaded = ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), GAME_FONT_SIZE);
+        if (!loaded) Log::warn("Editor", "Cannot read the font, using Inter: " + path);
+    } else {
         Log::warn("Editor", "Font not found, using Inter: " + path);
     }
-    // An earlier custom font is no longer needed.
-    if (game && game != bundledGame && game != chosen) ImGui::GetIO().Fonts->RemoveFont(game);
-    game = chosen;
+    loadedFonts[path] = loaded;
+    return loaded ? loaded : bundledGame;
+}
+
+ImFont* ImGuiLayer::setGameFont(const std::string& path) {
+    game = fontFor(path);
     return game;
 }
 

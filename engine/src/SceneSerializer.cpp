@@ -212,7 +212,7 @@ namespace {
             j["ui"] = {{"kind", (int)ui->kind}, {"anchor", (int)ui->anchor},
                        {"offset", json::array({ui->offset.x, ui->offset.y})}, {"size", json::array({ui->size.x, ui->size.y})},
                        {"stretch", ui->stretch}, {"color", vec4ToJson(ui->color)}, {"background", vec4ToJson(ui->background)},
-                       {"rounding", ui->rounding}, {"text", ui->text}, {"fontSize", ui->fontSize}, {"align", ui->align},
+                       {"rounding", ui->rounding}, {"text", ui->text}, {"font", ui->font}, {"fontSize", ui->fontSize}, {"align", ui->align},
                        {"image", ui->image}, {"fill", ui->fill}, {"binding", (int)ui->binding}};
         } else if (const auto* camera = dynamic_cast<const CameraObject*>(&object)) {
             j["camera"] = {{"fieldOfView", camera->fieldOfView},
@@ -343,6 +343,7 @@ namespace {
             ui->background = vec4Field(u, "background", ui->background);
             ui->rounding = std::max(0.0f, u.value("rounding", ui->rounding));
             ui->text = u.value("text", ui->text);
+            ui->font = u.value("font", ui->font);
             ui->fontSize = std::clamp(u.value("fontSize", ui->fontSize), 4.0f, 400.0f);
             ui->align = std::clamp(u.value("align", ui->align), 0, 2);
             ui->image = u.value("image", ui->image);

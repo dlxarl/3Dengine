@@ -2,6 +2,7 @@
 #include "imgui.h"
 
 #include <string>
+#include <unordered_map>
 
 struct GLFWwindow;
 
@@ -25,11 +26,15 @@ public:
     // The font of the game's own interface. An empty or unreadable path is the bundled Inter.
     ImFont* setGameFont(const std::string& path);
 
+    // A font from a file, loaded once and kept; the bundled Inter when the path is empty or unreadable.
+    ImFont* fontFor(const std::string& path);
+
 private:
     ImGuiContext* context = nullptr;
     ImFont* ui = nullptr;
     ImFont* mono = nullptr;
     ImFont* game = nullptr;
     ImFont* bundledGame = nullptr;
+    std::unordered_map<std::string, ImFont*> loadedFonts;
     std::string layoutPath;  // ImGui keeps the pointer, so the string must outlive the context
 };

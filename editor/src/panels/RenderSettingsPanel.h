@@ -12,5 +12,4 @@ private:
     void drawImage(EditorContext& ctx);
     void drawPost(EditorContext& ctx);
     void drawEnvironment(EditorContext& ctx);
-    void drawInterface(EditorContext& ctx);
 };
