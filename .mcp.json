@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "aureon": { "command": "python3", "args": ["tools/mcp/server.py"] }
+  }
+}

@@ -113,6 +113,12 @@ if (APPLE)
     )
 endif()
 
+# Renders a scene to a PNG without opening the Editor; the MCP server uses it to see.
+add_executable(aureon_shot src/tools_shot.cpp)
+target_link_libraries(aureon_shot PRIVATE editor_core)
+target_include_directories(aureon_shot PRIVATE ${stb_SOURCE_DIR})
+engine_add_resources(aureon_shot)
+
 engine_add_resources(Editor
         EDITOR_SHADERS "${CMAKE_CURRENT_SOURCE_DIR}/resources/shaders"
         FONTS
